@@ -294,7 +294,18 @@ export default function CapturePage() {
     const bounds = calcMaskBounds(maskToUse, w, h);
     const feathered = createFeatheredMask(maskToUse, w, h);
 
-    compositeMask(ctx, coverImg, maskToUse, video, w, h, transformRef.current, bounds, feathered);
+    // 멀티컷: 이전 컷 사진이 누적된 compositeCanvas를 배경으로 사용
+    let bgImage: HTMLImageElement | HTMLCanvasElement = coverImg;
+    if (totalCutsRef.current > 1 && compositeCanvasRef.current) {
+      // compositeCanvas를 원본 해상도로 스케일
+      const bgCanvas = document.createElement("canvas");
+      bgCanvas.width = w;
+      bgCanvas.height = h;
+      bgCanvas.getContext("2d")!.drawImage(compositeCanvasRef.current, 0, 0, w, h);
+      bgImage = bgCanvas;
+    }
+
+    compositeMask(ctx, bgImage, maskToUse, video, w, h, transformRef.current, bounds, feathered);
     return hrc;
   }, [videoRef]);
 
