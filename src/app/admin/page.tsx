@@ -104,6 +104,12 @@ export default function AdminPage() {
         </button>
       </div>
 
+      {/* 안내 문구 */}
+      <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-6 text-sm text-amber-800">
+        <p className="font-bold mb-1">안내사항</p>
+        <p>등록한 책표지는 이 브라우저의 로컬 저장소에 저장됩니다. 브라우저 데이터 삭제, 시크릿 모드 사용, 다른 기기/브라우저에서 접속 시 등록한 책표지가 사라질 수 있습니다.</p>
+      </div>
+
       {/* 등록/수정 폼 */}
       <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-orange-100">
         <h2 className="text-lg font-bold mb-4 text-primary">
