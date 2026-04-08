@@ -47,16 +47,20 @@ export async function createGif(
 }
 
 /**
- * 프레임 버퍼: 최근 N개 프레임을 링 버퍼로 유지
+ * 프레임 버퍼: 컷별 프레임 저장소
+ * - 현재 컷은 링 버퍼로 최근 framesPerCut개 유지
+ * - saveCut() 호출 시 현재 버퍼를 확정 저장
+ * - getFramesAsCanvases()로 모든 컷의 프레임을 순서대로 반환
  */
 export class FrameBuffer {
-  private frames: ImageData[] = [];
-  private maxFrames: number;
+  private currentFrames: ImageData[] = [];
+  private savedCuts: ImageData[][] = [];
+  private framesPerCut: number;
   private width: number;
   private height: number;
 
-  constructor(maxFrames: number, width: number, height: number) {
-    this.maxFrames = maxFrames;
+  constructor(framesPerCut: number, width: number, height: number) {
+    this.framesPerCut = framesPerCut;
     this.width = width;
     this.height = height;
   }
@@ -81,15 +85,25 @@ export class FrameBuffer {
     const tempCtx = tempCanvas.getContext("2d")!;
     tempCtx.drawImage(sourceCanvas, 0, 0, w, h);
 
-    this.frames.push(tempCtx.getImageData(0, 0, w, h));
+    this.currentFrames.push(tempCtx.getImageData(0, 0, w, h));
 
-    if (this.frames.length > this.maxFrames) {
-      this.frames.shift();
+    // 링 버퍼: 현재 컷은 최근 framesPerCut개만 유지
+    if (this.currentFrames.length > this.framesPerCut) {
+      this.currentFrames.shift();
     }
   }
 
+  /** 현재 버퍼를 해당 컷으로 확정 저장하고 버퍼 초기화 */
+  saveCut() {
+    this.savedCuts.push([...this.currentFrames]);
+    this.currentFrames = [];
+  }
+
+  /** 모든 컷의 프레임을 순서대로 합쳐서 Canvas 배열로 반환 */
   getFramesAsCanvases(): HTMLCanvasElement[] {
-    return this.frames.map((data) => {
+    // 저장된 컷 + 현재 버퍼(아직 saveCut 안 된 마지막 컷)
+    const allFrames = [...this.savedCuts.flat(), ...this.currentFrames];
+    return allFrames.map((data) => {
       const canvas = document.createElement("canvas");
       canvas.width = data.width;
       canvas.height = data.height;
@@ -100,10 +114,11 @@ export class FrameBuffer {
   }
 
   clear() {
-    this.frames = [];
+    this.currentFrames = [];
+    this.savedCuts = [];
   }
 
   get length() {
-    return this.frames.length;
+    return this.savedCuts.reduce((sum, cut) => sum + cut.length, 0) + this.currentFrames.length;
   }
 }

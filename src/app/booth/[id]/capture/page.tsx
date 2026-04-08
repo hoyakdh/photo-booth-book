@@ -88,7 +88,7 @@ export default function CapturePage() {
   useEffect(() => {
     initAudio();
     wmConfigRef.current = loadWatermarkConfig();
-    frameBufferRef.current = new FrameBuffer(40, 480, 360);
+    frameBufferRef.current = new FrameBuffer(15, 480, 360);
   }, []);
 
   // 카메라 시작
@@ -341,6 +341,11 @@ export default function CapturePage() {
         }
         const compCtx = compositeCanvasRef.current.getContext("2d")!;
         compCtx.drawImage(hiRes, 0, 0);
+      }
+
+      // 현재 컷 GIF 프레임 확정 저장
+      if (frameBufferRef.current) {
+        frameBufferRef.current.saveCut();
       }
 
       const nextCut = cut + 1;
