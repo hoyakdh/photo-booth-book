@@ -148,6 +148,12 @@ export default function ResultPage() {
         >
           다시 촬영
         </button>
+        <button
+          onClick={handleHome}
+          className="px-6 py-4 bg-gray-300 text-gray-700 rounded-2xl font-bold text-lg btn-touch"
+        >
+          홈
+        </button>
       </div>
     </div>
   );
