@@ -450,7 +450,7 @@ export default function CapturePage() {
 
       {/* 크로마키 합성 캔버스 */}
       <div
-        className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0"
+        className="flex-1 flex items-center justify-center relative"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
