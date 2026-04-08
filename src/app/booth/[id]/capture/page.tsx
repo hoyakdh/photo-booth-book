@@ -7,6 +7,7 @@ import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
 import { getCompositeFunction, CameraTransform } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
+import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -64,6 +65,11 @@ export default function CapturePage() {
 
   const handleTouchEnd = useCallback(() => {
     lastPinchDistRef.current = null;
+  }, []);
+
+  // iOS Audio 활성화 (마운트 시)
+  useEffect(() => {
+    initAudio();
   }, []);
 
   // 카메라 시작
@@ -140,15 +146,22 @@ export default function CapturePage() {
 
     let count = 3;
     setCountdown(count);
+    playBeep();
 
     const timer = setInterval(() => {
       count--;
       if (count > 0) {
         setCountdown(count);
+        if (count === 1) {
+          playFinalBeep();
+        } else {
+          playBeep();
+        }
       } else {
         clearInterval(timer);
         setCountdown(null);
 
+        playShutter();
         setFlash(true);
         setTimeout(() => setFlash(false), 400);
 
