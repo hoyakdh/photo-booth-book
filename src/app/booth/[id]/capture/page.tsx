@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useBookCover } from "@/hooks/useBookCovers";
 import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
-import { compositeMask, calcMaskBounds, CameraTransform, MaskBounds } from "@/lib/chromakey";
+import { compositeMask, calcMaskBounds, createFeatheredMask, CameraTransform, MaskBounds } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 
@@ -25,6 +25,7 @@ export default function CapturePage() {
   const coverImageRef = useRef<HTMLImageElement | null>(null);
   const maskImageRef = useRef<HTMLImageElement | null>(null);
   const maskBoundsRef = useRef<MaskBounds | null>(null);
+  const featheredMaskRef = useRef<ImageData | null>(null);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
@@ -153,18 +154,23 @@ export default function CapturePage() {
         if (canvas.width !== Math.round(w) || canvas.height !== Math.round(h)) {
           canvas.width = Math.round(w);
           canvas.height = Math.round(h);
-          // 캔버스 크기 변경 시 바운딩박스 재계산
+          // 캔버스 크기 변경 시 바운딩박스 + 페더링 마스크 재계산
           maskBoundsRef.current = calcMaskBounds(maskImg, canvas.width, canvas.height);
+          featheredMaskRef.current = createFeatheredMask(maskImg, canvas.width, canvas.height);
         }
 
         if (!maskBoundsRef.current) {
           maskBoundsRef.current = calcMaskBounds(maskImg, canvas.width, canvas.height);
         }
+        if (!featheredMaskRef.current) {
+          featheredMaskRef.current = createFeatheredMask(maskImg, canvas.width, canvas.height);
+        }
 
         compositeMask(
           ctx, coverImg, maskImg, video, canvas.width, canvas.height,
           transformRef.current,
-          maskBoundsRef.current
+          maskBoundsRef.current,
+          featheredMaskRef.current
         );
       }
       animFrameRef.current = requestAnimationFrame(render);
