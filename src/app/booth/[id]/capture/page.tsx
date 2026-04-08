@@ -172,7 +172,9 @@ export default function CapturePage() {
       const cH = canvas.parentElement?.clientHeight || 640;
       let w: number, h: number;
       if (cW / cH < aspect) { w = cW; h = cW / aspect; } else { h = cH; w = cH * aspect; }
-      canvas.width = Math.round(w); canvas.height = Math.round(h);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      canvas.style.width = `${Math.round(w)}px`; canvas.style.height = `${Math.round(h)}px`;
       ctx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
       return;
     }
@@ -192,11 +194,16 @@ export default function CapturePage() {
         let w: number, h: number;
         if (cW / cH < aspect) { w = cW; h = cW / aspect; } else { h = cH; w = cH * aspect; }
 
-        const sizeChanged = canvas.width !== Math.round(w) || canvas.height !== Math.round(h);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const canvasW = Math.round(w * dpr);
+        const canvasH = Math.round(h * dpr);
+        const sizeChanged = canvas.width !== canvasW || canvas.height !== canvasH;
 
         if (sizeChanged || !initialized) {
-          canvas.width = Math.round(w);
-          canvas.height = Math.round(h);
+          canvas.width = canvasW;
+          canvas.height = canvasH;
+          canvas.style.width = `${Math.round(w)}px`;
+          canvas.style.height = `${Math.round(h)}px`;
 
           // 멀티컷 영역 감지 (초기화 또는 리사이즈 시 재계산)
           const bounds = calcMultiMaskBounds(maskImg, canvas.width, canvas.height);
