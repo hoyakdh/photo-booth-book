@@ -4,12 +4,59 @@ import { useRef, useState, useEffect, useCallback } from "react";
 
 interface ChromaKeyEditorProps {
   imageData: string;
-  existingMask?: string | null; // 기존 마스크 (수정 시)
+  existingMask?: string | null;
   onSave: (editedImageData: string, maskData: string) => void;
   onCancel: () => void;
 }
 
 type Tool = "brush" | "eraser" | "rect";
+
+/**
+ * 이미지에서 초록색 영역을 자동 감지하여 마스크 생성
+ * (기존 크로마키 방식으로 저장된 책표지 호환용)
+ */
+function autoDetectGreenMask(img: HTMLImageElement): string | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0);
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imgData.data;
+
+  let greenPixelCount = 0;
+  const maskData = ctx.createImageData(canvas.width, canvas.height);
+  const maskPixels = maskData.data;
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+
+    // 초록색 감지: G가 높고, R과 B가 낮은 영역
+    const greenDiff = g - Math.max(r, b);
+    if (greenDiff > 60 && g > 150) {
+      maskPixels[i] = 255;
+      maskPixels[i + 1] = 255;
+      maskPixels[i + 2] = 255;
+      maskPixels[i + 3] = 255;
+      greenPixelCount++;
+    } else {
+      maskPixels[i] = 0;
+      maskPixels[i + 1] = 0;
+      maskPixels[i + 2] = 0;
+      maskPixels[i + 3] = 255;
+    }
+  }
+
+  // 초록색이 전체의 1% 이상이면 자동 감지된 것으로 판단
+  if (greenPixelCount > (pixels.length / 4) * 0.01) {
+    ctx.putImageData(maskData, 0, 0);
+    return canvas.toDataURL("image/png");
+  }
+
+  return null;
+}
 
 export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCancel }: ChromaKeyEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -20,6 +67,7 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
   const [isDrawing, setIsDrawing] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const [maskRestored, setMaskRestored] = useState(false);
 
   const [rectStart, setRectStart] = useState<{ x: number; y: number } | null>(null);
   const [rectPreview, setRectPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -27,17 +75,29 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
 
+  // 사용할 마스크 결정: 기존 마스크 또는 자동 감지
+  const resolvedMaskRef = useRef<string | null>(null);
+
   // 이미지 로드
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
       imgRef.current = img;
+
+      // 마스크 결정
+      if (existingMask) {
+        resolvedMaskRef.current = existingMask;
+      } else {
+        // 기존 방식(초록색 합성) 책표지 → 자동 감지
+        resolvedMaskRef.current = autoDetectGreenMask(img);
+      }
+
       setImgLoaded(true);
     };
     img.src = imageData;
-  }, [imageData]);
+  }, [imageData, existingMask]);
 
-  // 캔버스 설정 + 기존 마스크 복원
+  // 캔버스 설정
   useEffect(() => {
     if (!imgLoaded || !imgRef.current || !canvasRef.current || !overlayRef.current || !containerRef.current) return;
 
@@ -76,35 +136,40 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0);
 
-    // 기존 마스크가 있으면 오버레이에 복원
-    if (existingMask) {
+    // 마스크 복원
+    const maskSrc = resolvedMaskRef.current;
+    if (maskSrc) {
       const maskImg = new Image();
       maskImg.onload = () => {
         const overlayCtx = overlay.getContext("2d")!;
-        // 마스크(흰색 영역)를 초록색 오버레이로 변환하여 표시
+        // 마스크를 overlay 크기에 맞게 그리기
         const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = img.naturalWidth;
-        tempCanvas.height = img.naturalHeight;
+        tempCanvas.width = overlay.width;
+        tempCanvas.height = overlay.height;
         const tempCtx = tempCanvas.getContext("2d")!;
-        tempCtx.drawImage(maskImg, 0, 0);
-        const maskData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(maskImg, 0, 0, overlay.width, overlay.height);
+        const maskData = tempCtx.getImageData(0, 0, overlay.width, overlay.height);
         const pixels = maskData.data;
-        // 흰색 → 초록색으로 변환
+
+        // 흰색 → 초록색으로 변환하여 오버레이에 표시
         for (let i = 0; i < pixels.length; i += 4) {
-          if (pixels[i] > 128) { // 흰색 영역
-            pixels[i] = 0;       // R
-            pixels[i + 1] = 255; // G
-            pixels[i + 2] = 0;   // B
-            pixels[i + 3] = 255; // A
+          if (pixels[i] > 128) {
+            pixels[i] = 0;
+            pixels[i + 1] = 255;
+            pixels[i + 2] = 0;
+            pixels[i + 3] = 255;
           } else {
-            pixels[i + 3] = 0;   // 투명
+            pixels[i + 3] = 0;
           }
         }
         overlayCtx.putImageData(maskData, 0, 0);
+        setMaskRestored(true);
       };
-      maskImg.src = existingMask;
+      maskImg.src = maskSrc;
+    } else {
+      setMaskRestored(true);
     }
-  }, [imgLoaded, existingMask]);
+  }, [imgLoaded]);
 
   const getCanvasPos = useCallback((clientX: number, clientY: number) => {
     if (!overlayRef.current) return { x: 0, y: 0 };
@@ -194,14 +259,14 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     ctx.clearRect(0, 0, overlay.width, overlay.height);
   };
 
-  // 저장: 원본 이미지 그대로 + 마스크를 별도로 생성
+  // 저장: 원본 이미지 + 마스크 별도 생성
   const handleSave = () => {
     if (!overlayRef.current || !imgRef.current) return;
 
     const img = imgRef.current;
     const overlay = overlayRef.current;
 
-    // 마스크 생성: 칠한 영역 = 흰색, 나머지 = 검정
+    // 마스크 생성
     const maskCanvas = document.createElement("canvas");
     maskCanvas.width = img.naturalWidth;
     maskCanvas.height = img.naturalHeight;
@@ -211,26 +276,22 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     const overlayData = overlayCtx.getImageData(0, 0, overlay.width, overlay.height);
     const pixels = overlayData.data;
 
-    // 검정 배경
     maskCtx.fillStyle = "#000000";
     maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    const maskPixels = maskData.data;
+    const maskImageData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    const maskPixels = maskImageData.data;
 
     for (let i = 0; i < pixels.length; i += 4) {
-      // 오버레이에 무언가 칠해진 영역 (alpha > 0)
       if (pixels[i + 3] > 0) {
-        maskPixels[i] = 255;     // R
-        maskPixels[i + 1] = 255; // G
-        maskPixels[i + 2] = 255; // B
-        maskPixels[i + 3] = 255; // A
+        maskPixels[i] = 255;
+        maskPixels[i + 1] = 255;
+        maskPixels[i + 2] = 255;
+        maskPixels[i + 3] = 255;
       }
     }
-    maskCtx.putImageData(maskData, 0, 0);
+    maskCtx.putImageData(maskImageData, 0, 0);
 
     const maskDataURL = maskCanvas.toDataURL("image/png");
-
-    // 원본 이미지는 변경하지 않고 그대로 전달
     onSave(imageData, maskDataURL);
   };
 
@@ -291,10 +352,17 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
         초록색으로 칠한 부분만 카메라로 보여요!
       </div>
 
+      {/* 로딩 */}
+      {!maskRestored && (
+        <div className="flex-1 flex items-center justify-center bg-gray-800">
+          <p className="text-white text-lg">불러오는 중...</p>
+        </div>
+      )}
+
       {/* 편집 영역 */}
       <div
         ref={containerRef}
-        className="flex-1 relative overflow-hidden bg-gray-800"
+        className={`flex-1 relative overflow-hidden bg-gray-800 ${!maskRestored ? "hidden" : ""}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

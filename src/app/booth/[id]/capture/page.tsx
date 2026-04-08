@@ -86,16 +86,44 @@ export default function CapturePage() {
 
   // 책표지 이미지 + 마스크 로드
   useEffect(() => {
-    if (cover) {
-      loadImage(cover.imageData).then((img) => {
-        coverImageRef.current = img;
-      });
+    if (!cover) return;
+
+    loadImage(cover.imageData).then((img) => {
+      coverImageRef.current = img;
+
       if (cover.maskData) {
-        loadImage(cover.maskData).then((img) => {
-          maskImageRef.current = img;
+        // 마스크가 있으면 그대로 사용
+        loadImage(cover.maskData).then((maskImg) => {
+          maskImageRef.current = maskImg;
+        });
+      } else {
+        // 마스크 없는 기존 책표지 → 초록색 자동 감지하여 마스크 생성
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = img.naturalWidth;
+        maskCanvas.height = img.naturalHeight;
+        const maskCtx = maskCanvas.getContext("2d")!;
+        maskCtx.drawImage(img, 0, 0);
+        const imgData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        const px = imgData.data;
+
+        maskCtx.fillStyle = "#000000";
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        const maskImgData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        const mp = maskImgData.data;
+
+        for (let i = 0; i < px.length; i += 4) {
+          const greenDiff = px[i + 1] - Math.max(px[i], px[i + 2]);
+          if (greenDiff > 60 && px[i + 1] > 150) {
+            mp[i] = mp[i + 1] = mp[i + 2] = mp[i + 3] = 255;
+          }
+        }
+        maskCtx.putImageData(maskImgData, 0, 0);
+
+        loadImage(maskCanvas.toDataURL("image/png")).then((maskImg) => {
+          maskImageRef.current = maskImg;
         });
       }
-    }
+    });
   }, [cover]);
 
   // 크로마키 실시간 렌더링
