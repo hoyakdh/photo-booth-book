@@ -28,6 +28,7 @@ export default function CapturePage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
   const [cameraStarted, setCameraStarted] = useState(false);
+  const [maskLoaded, setMaskLoaded] = useState(false);
 
   // 줌 & 이동 상태
   const [zoom, setZoom] = useState(1);
@@ -87,16 +88,21 @@ export default function CapturePage() {
   // 책표지 이미지 + 마스크 로드
   useEffect(() => {
     if (!cover) return;
+    setMaskLoaded(false);
 
     loadImage(cover.imageData).then((img) => {
       coverImageRef.current = img;
-    });
 
-    if (cover.maskData) {
-      loadImage(cover.maskData).then((maskImg) => {
-        maskImageRef.current = maskImg;
-      });
-    }
+      if (cover.maskData) {
+        loadImage(cover.maskData).then((maskImg) => {
+          maskImageRef.current = maskImg;
+          setMaskLoaded(true);
+        });
+      } else {
+        maskImageRef.current = null;
+        setMaskLoaded(false);
+      }
+    });
   }, [cover]);
 
   // 크로마키 실시간 렌더링
@@ -161,7 +167,7 @@ export default function CapturePage() {
     return () => {
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isReady, videoRef]);
+  }, [isReady, videoRef, maskLoaded]);
 
   // 촬영 (카운트다운 → 캡처)
   const handleCapture = useCallback(() => {
