@@ -27,11 +27,21 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0, offsetX: 0, offsetY: 0 });
+
+  // 핀치/회전 제스처 상태
+  const gestureRef = useRef<{
+    initialDist: number;
+    initialAngle: number;
+    initialScale: number;
+    initialRotation: number;
+    stickerId: string;
+  } | null>(null);
 
   // 이미지 크기 계산
   useEffect(() => {
@@ -46,18 +56,9 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
       const aspect = img.naturalWidth / img.naturalHeight;
 
       let w: number, h: number;
-      if (cw / ch < aspect) {
-        w = cw;
-        h = cw / aspect;
-      } else {
-        h = ch;
-        w = ch * aspect;
-      }
-      setImgSize({
-        w, h,
-        offsetX: (cw - w) / 2,
-        offsetY: (ch - h) / 2,
-      });
+      if (cw / ch < aspect) { w = cw; h = cw / aspect; }
+      else { h = ch; w = ch * aspect; }
+      setImgSize({ w, h, offsetX: (cw - w) / 2, offsetY: (ch - h) / 2 });
     };
 
     const img = new Image();
@@ -68,45 +69,35 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
   }, [imageData]);
 
   const addEmoji = (emoji: string) => {
-    setStickers((prev) => [
-      ...prev,
-      {
-        id: `s-${Date.now()}-${Math.random()}`,
-        content: emoji,
-        x: 50,
-        y: 50,
-        scale: 1,
-        rotation: 0,
-      },
-    ]);
+    const id = `s-${Date.now()}-${Math.random()}`;
+    setStickers((prev) => [...prev, { id, content: emoji, x: 50, y: 50, scale: 1, rotation: 0 }]);
+    setActiveId(id);
   };
 
   const addText = () => {
     if (!textInput.trim()) return;
-    setStickers((prev) => [
-      ...prev,
-      {
-        id: `t-${Date.now()}`,
-        content: textInput.trim(),
-        x: 50,
-        y: 50,
-        scale: 1,
-        rotation: 0,
-      },
-    ]);
+    const id = `t-${Date.now()}`;
+    setStickers((prev) => [...prev, { id, content: textInput.trim(), x: 50, y: 50, scale: 1, rotation: 0 }]);
+    setActiveId(id);
     setTextInput("");
     setShowTextInput(false);
   };
 
   const removeSticker = (id: string) => {
     setStickers((prev) => prev.filter((s) => s.id !== id));
+    if (activeId === id) setActiveId(null);
   };
 
-  // 드래그
+  const updateSticker = useCallback((id: string, updates: Partial<Sticker>) => {
+    setStickers((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  // 한 손가락 드래그
   const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDraggingId(id);
+    setActiveId(id);
     const el = e.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
     setDragOffset({
@@ -118,29 +109,86 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!draggingId || !imgSize.w) return;
 
+    const containerTop = containerRef.current?.getBoundingClientRect().top || 0;
     const x = ((e.clientX - dragOffset.x - imgSize.offsetX) / imgSize.w) * 100;
-    const y = ((e.clientY - dragOffset.y - imgSize.offsetY - (containerRef.current?.getBoundingClientRect().top || 0)) / imgSize.h) * 100;
+    const y = ((e.clientY - dragOffset.y - imgSize.offsetY - containerTop) / imgSize.h) * 100;
 
-    setStickers((prev) =>
-      prev.map((s) =>
-        s.id === draggingId
-          ? { ...s, x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) }
-          : s
-      )
-    );
-  }, [draggingId, dragOffset, imgSize]);
+    updateSticker(draggingId, {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    });
+  }, [draggingId, dragOffset, imgSize, updateSticker]);
 
   const handlePointerUp = useCallback(() => {
     setDraggingId(null);
   }, []);
 
-  // 크기 조절
+  // 두 손가락 제스처: 핀치 줌 + 회전
+  const handleTouchStart = useCallback((e: React.TouchEvent, id: string) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+      const sticker = stickers.find((s) => s.id === id);
+      if (!sticker) return;
+
+      gestureRef.current = {
+        initialDist: dist,
+        initialAngle: angle,
+        initialScale: sticker.scale,
+        initialRotation: sticker.rotation,
+        stickerId: id,
+      };
+      setActiveId(id);
+    }
+  }, [stickers]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && gestureRef.current) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+      const g = gestureRef.current;
+      const scaleDelta = dist / g.initialDist;
+      const rotationDelta = angle - g.initialAngle;
+
+      updateSticker(g.stickerId, {
+        scale: Math.max(0.2, Math.min(5, g.initialScale * scaleDelta)),
+        rotation: Math.round(g.initialRotation + rotationDelta),
+      });
+    }
+  }, [updateSticker]);
+
+  const handleTouchEnd = useCallback(() => {
+    gestureRef.current = null;
+  }, []);
+
+  // 버튼으로 크기/회전 조절
   const adjustScale = (id: string, delta: number) => {
-    setStickers((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, scale: Math.max(0.3, Math.min(3, s.scale + delta)) } : s
-      )
-    );
+    updateSticker(id, {
+      scale: Math.max(0.2, Math.min(5, (stickers.find((s) => s.id === id)?.scale || 1) + delta)),
+    });
+  };
+
+  const adjustRotation = (id: string, delta: number) => {
+    updateSticker(id, {
+      rotation: ((stickers.find((s) => s.id === id)?.rotation || 0) + delta) % 360,
+    });
+  };
+
+  // 배경 탭 시 선택 해제
+  const handleBgClick = () => {
+    setActiveId(null);
   };
 
   // Canvas 합성 저장
@@ -155,7 +203,6 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
     ctx.drawImage(img, 0, 0);
 
     const scaleX = img.naturalWidth / imgSize.w;
-    const scaleY = img.naturalHeight / imgSize.h;
 
     for (const sticker of stickers) {
       const px = (sticker.x / 100) * img.naturalWidth;
@@ -195,6 +242,7 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onClick={handleBgClick}
         style={{ touchAction: "none" }}
       >
         <div
@@ -226,41 +274,66 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
           />
 
           {/* 스티커들 */}
-          {stickers.map((sticker) => (
-            <div
-              key={sticker.id}
-              className="absolute cursor-move select-none"
-              style={{
-                left: `${sticker.x}%`,
-                top: `${sticker.y}%`,
-                transform: `translate(-50%, -50%) scale(${sticker.scale}) rotate(${sticker.rotation}deg)`,
-                fontSize: sticker.content.length <= 2 ? "2.5rem" : "1.2rem",
-                fontWeight: "bold",
-                color: "white",
-                textShadow: "0 2px 4px rgba(0,0,0,0.5)",
-                zIndex: draggingId === sticker.id ? 50 : 10,
-              }}
-              onPointerDown={(e) => handlePointerDown(e, sticker.id)}
-            >
-              {sticker.content}
-              {/* 컨트롤 */}
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1 opacity-70">
-                <button
-                  onClick={(e) => { e.stopPropagation(); adjustScale(sticker.id, 0.2); }}
-                  className="w-6 h-6 bg-white text-black rounded-full text-xs font-bold"
-                >+</button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); adjustScale(sticker.id, -0.2); }}
-                  className="w-6 h-6 bg-white text-black rounded-full text-xs font-bold"
-                >-</button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeSticker(sticker.id); }}
-                  className="w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold"
-                >x</button>
+          {stickers.map((sticker) => {
+            const isActive = activeId === sticker.id;
+            return (
+              <div
+                key={sticker.id}
+                className="absolute cursor-move select-none"
+                style={{
+                  left: `${sticker.x}%`,
+                  top: `${sticker.y}%`,
+                  transform: `translate(-50%, -50%) scale(${sticker.scale}) rotate(${sticker.rotation}deg)`,
+                  fontSize: sticker.content.length <= 2 ? "2.5rem" : "1.2rem",
+                  fontWeight: "bold",
+                  color: "white",
+                  textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                  zIndex: isActive ? 50 : 10,
+                }}
+                onPointerDown={(e) => handlePointerDown(e, sticker.id)}
+                onTouchStart={(e) => handleTouchStart(e, sticker.id)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                {/* 선택 표시 테두리 */}
+                {isActive && (
+                  <div className="absolute -inset-2 border-2 border-dashed border-white/60 rounded-lg pointer-events-none" />
+                )}
+                {sticker.content}
+                {/* 컨트롤 (선택된 스티커만) */}
+                {isActive && (
+                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 flex gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); adjustScale(sticker.id, 0.2); }}
+                      className="w-7 h-7 bg-white text-black rounded-full text-xs font-bold shadow"
+                    >+</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); adjustScale(sticker.id, -0.2); }}
+                      className="w-7 h-7 bg-white text-black rounded-full text-xs font-bold shadow"
+                    >-</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); adjustRotation(sticker.id, -15); }}
+                      className="w-7 h-7 bg-white text-black rounded-full text-xs font-bold shadow"
+                    >↺</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); adjustRotation(sticker.id, 15); }}
+                      className="w-7 h-7 bg-white text-black rounded-full text-xs font-bold shadow"
+                    >↻</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeSticker(sticker.id); }}
+                      className="w-7 h-7 bg-red-500 text-white rounded-full text-xs font-bold shadow"
+                    >✕</button>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      </div>
+
+      {/* 안내 */}
+      <div className="text-center py-1 bg-pink-500/80 text-white text-xs">
+        한 손가락: 이동 | 두 손가락: 크기 조절 + 회전
       </div>
 
       {/* 스티커 팔레트 */}
