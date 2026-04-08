@@ -11,53 +11,6 @@ interface ChromaKeyEditorProps {
 
 type Tool = "brush" | "eraser" | "rect";
 
-/**
- * 이미지에서 초록색 영역을 자동 감지하여 마스크 생성
- * (기존 크로마키 방식으로 저장된 책표지 호환용)
- */
-function autoDetectGreenMask(img: HTMLImageElement): string | null {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, 0, 0);
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const pixels = imgData.data;
-
-  let greenPixelCount = 0;
-  const maskData = ctx.createImageData(canvas.width, canvas.height);
-  const maskPixels = maskData.data;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-
-    // 초록색 감지: G가 높고, R과 B가 낮은 영역
-    const greenDiff = g - Math.max(r, b);
-    if (greenDiff > 60 && g > 150) {
-      maskPixels[i] = 255;
-      maskPixels[i + 1] = 255;
-      maskPixels[i + 2] = 255;
-      maskPixels[i + 3] = 255;
-      greenPixelCount++;
-    } else {
-      maskPixels[i] = 0;
-      maskPixels[i + 1] = 0;
-      maskPixels[i + 2] = 0;
-      maskPixels[i + 3] = 255;
-    }
-  }
-
-  // 초록색이 전체의 1% 이상이면 자동 감지된 것으로 판단
-  if (greenPixelCount > (pixels.length / 4) * 0.01) {
-    ctx.putImageData(maskData, 0, 0);
-    return canvas.toDataURL("image/png");
-  }
-
-  return null;
-}
-
 export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCancel }: ChromaKeyEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,27 +28,15 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
 
-  // 사용할 마스크 결정: 기존 마스크 또는 자동 감지
-  const resolvedMaskRef = useRef<string | null>(null);
-
   // 이미지 로드
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
       imgRef.current = img;
-
-      // 마스크 결정
-      if (existingMask) {
-        resolvedMaskRef.current = existingMask;
-      } else {
-        // 기존 방식(초록색 합성) 책표지 → 자동 감지
-        resolvedMaskRef.current = autoDetectGreenMask(img);
-      }
-
       setImgLoaded(true);
     };
     img.src = imageData;
-  }, [imageData, existingMask]);
+  }, [imageData]);
 
   // 캔버스 설정
   useEffect(() => {
@@ -136,9 +77,9 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0);
 
-    // 마스크 복원
-    const maskSrc = resolvedMaskRef.current;
-    if (maskSrc) {
+    // 기존 마스크 복원
+    if (existingMask) {
+      const maskSrc = existingMask;
       const maskImg = new Image();
       maskImg.onload = () => {
         const overlayCtx = overlay.getContext("2d")!;

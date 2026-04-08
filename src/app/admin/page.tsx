@@ -9,12 +9,11 @@ import ChromaKeyEditor from "@/components/ChromaKeyEditor";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { covers, loading, addCover, removeCover, updateCover } = useBookCovers();
+  const { covers, loading, addCover, removeCover } = useBookCovers();
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [maskData, setMaskData] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [showChromaEditor, setShowChromaEditor] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,39 +47,18 @@ export default function AdminPage() {
     setIsUploading(true);
 
     try {
-      if (editingId) {
-        await updateCover({
-          id: editingId,
-          name: name.trim(),
-          imageData: preview,
-          maskData: maskData || undefined,
-          createdAt: Date.now(),
-        });
-        setEditingId(null);
-      } else {
-        const cover: BookCover = {
-          id: generateId(),
-          name: name.trim(),
-          imageData: preview,
-          maskData: maskData || undefined,
-          createdAt: Date.now(),
-        };
-        await addCover(cover);
-      }
-      setName("");
-      setPreview(null);
-      setMaskData(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      const cover: BookCover = {
+        id: generateId(),
+        name: name.trim(),
+        imageData: preview,
+        maskData: maskData || undefined,
+        createdAt: Date.now(),
+      };
+      await addCover(cover);
+      handleReset();
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const handleEdit = (cover: BookCover) => {
-    setEditingId(cover.id);
-    setName(cover.name);
-    setPreview(cover.imageData);
-    setMaskData(cover.maskData || null);
   };
 
   const handleDelete = async (id: string) => {
@@ -89,8 +67,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
+  const handleReset = () => {
     setName("");
     setPreview(null);
     setMaskData(null);
@@ -125,7 +102,7 @@ export default function AdminPage() {
       {/* 등록/수정 폼 */}
       <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-orange-100">
         <h2 className="text-lg font-bold mb-4 text-primary">
-          {editingId ? "책표지 수정" : "새 책표지 등록"}
+          새 책표지 등록
         </h2>
 
         <div className="space-y-4">
@@ -188,16 +165,8 @@ export default function AdminPage() {
               disabled={!name.trim() || !preview || isUploading}
               className="flex-1 py-3 bg-primary text-white rounded-xl font-bold text-lg disabled:opacity-50 btn-touch"
             >
-              {isUploading ? "저장 중..." : editingId ? "수정 완료" : "등록하기"}
+              {isUploading ? "저장 중..." : "등록하기"}
             </button>
-            {editingId && (
-              <button
-                onClick={handleCancel}
-                className="px-6 py-3 bg-gray-200 rounded-xl font-medium btn-touch"
-              >
-                취소
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -235,12 +204,6 @@ export default function AdminPage() {
                 )}
               </div>
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => handleEdit(cover)}
-                  className="px-3 py-1.5 bg-secondary text-white rounded-lg text-sm font-medium btn-touch"
-                >
-                  수정
-                </button>
                 <button
                   onClick={() => handleDelete(cover.id)}
                   className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"

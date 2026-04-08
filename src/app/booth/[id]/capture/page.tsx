@@ -90,46 +90,35 @@ export default function CapturePage() {
 
     loadImage(cover.imageData).then((img) => {
       coverImageRef.current = img;
-
-      if (cover.maskData) {
-        // 마스크가 있으면 그대로 사용
-        loadImage(cover.maskData).then((maskImg) => {
-          maskImageRef.current = maskImg;
-        });
-      } else {
-        // 마스크 없는 기존 책표지 → 초록색 자동 감지하여 마스크 생성
-        const maskCanvas = document.createElement("canvas");
-        maskCanvas.width = img.naturalWidth;
-        maskCanvas.height = img.naturalHeight;
-        const maskCtx = maskCanvas.getContext("2d")!;
-        maskCtx.drawImage(img, 0, 0);
-        const imgData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        const px = imgData.data;
-
-        maskCtx.fillStyle = "#000000";
-        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-        const maskImgData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        const mp = maskImgData.data;
-
-        for (let i = 0; i < px.length; i += 4) {
-          const greenDiff = px[i + 1] - Math.max(px[i], px[i + 2]);
-          if (greenDiff > 60 && px[i + 1] > 150) {
-            mp[i] = mp[i + 1] = mp[i + 2] = mp[i + 3] = 255;
-          }
-        }
-        maskCtx.putImageData(maskImgData, 0, 0);
-
-        loadImage(maskCanvas.toDataURL("image/png")).then((maskImg) => {
-          maskImageRef.current = maskImg;
-        });
-      }
     });
+
+    if (cover.maskData) {
+      loadImage(cover.maskData).then((maskImg) => {
+        maskImageRef.current = maskImg;
+      });
+    }
   }, [cover]);
 
   // 크로마키 실시간 렌더링
   useEffect(() => {
     if (!isReady || !coverImageRef.current || !canvasRef.current || !videoRef.current) return;
-    if (!maskImageRef.current) return; // 마스크 없으면 원본만 표시
+
+    // 마스크 없으면 책표지만 표시 (크로마키 없음)
+    if (!maskImageRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+      const coverImg = coverImageRef.current;
+      const aspect = coverImg.naturalWidth / coverImg.naturalHeight;
+      const containerW = canvas.parentElement?.clientWidth || 360;
+      const containerH = canvas.parentElement?.clientHeight || 640;
+      let w: number, h: number;
+      if (containerW / containerH < aspect) { w = containerW; h = containerW / aspect; }
+      else { h = containerH; w = containerH * aspect; }
+      canvas.width = Math.round(w);
+      canvas.height = Math.round(h);
+      ctx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
+      return;
+    }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
