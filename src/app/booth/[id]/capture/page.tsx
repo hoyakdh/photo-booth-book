@@ -7,7 +7,7 @@ import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
 import {
   compositeMask, calcMaskBounds, calcMultiMaskBounds,
-  extractSingleMask, createFeatheredMask,
+  extractSingleMaskCanvas, createFeatheredMask,
   CameraTransform, MaskBounds,
 } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
@@ -34,12 +34,12 @@ export default function CapturePage() {
   const frameBufferRef = useRef<FrameBuffer | null>(null);
   const frameCountRef = useRef(0);
 
-  // 멀티컷: 각 영역별 바운딩박스, 페더링 마스크, 캡처 이미지
+  // 멀티컷 관련 refs
   const allBoundsRef = useRef<MaskBounds[]>([]);
   const currentBoundsRef = useRef<MaskBounds | null>(null);
   const currentFeatheredRef = useRef<ImageData | null>(null);
-  // 멀티컷에서 이전 컷 촬영 결과를 누적하는 합성 캔버스
-  const compositeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const currentMaskCanvasRef = useRef<HTMLCanvasElement | null>(null); // 현재 컷 전용 마스크
+  const compositeCanvasRef = useRef<HTMLCanvasElement | null>(null); // 이전 컷 누적
 
   const [totalCuts, setTotalCuts] = useState(1);
   const totalCutsRef = useRef(1);
@@ -118,7 +118,7 @@ export default function CapturePage() {
     });
   }, [cover]);
 
-  // 현재 컷이 변경될 때 해당 영역의 바운딩박스 + 페더링 마스크 설정
+  // 현재 컷이 변경될 때 해당 영역의 바운딩박스 + 전용 마스크 + 페더링 설정
   const setupCurrentCut = useCallback((cutIndex: number) => {
     if (!maskImageRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -126,30 +126,22 @@ export default function CapturePage() {
     const bounds = allBoundsRef.current;
 
     if (bounds.length <= 1) {
-      // 1컷 모드
+      // 1컷 모드: 전체 마스크 사용
       currentBoundsRef.current = calcMaskBounds(maskImg, canvas.width, canvas.height);
       currentFeatheredRef.current = createFeatheredMask(maskImg, canvas.width, canvas.height);
+      currentMaskCanvasRef.current = null; // null이면 원본 마스크 사용
     } else {
-      // 멀티컷: 현재 컷 영역만 추출
+      // 멀티컷: 현재 컷 영역만 추출한 마스크 캔버스 생성
       const b = bounds[cutIndex];
       if (!b) return;
       currentBoundsRef.current = b;
-      const singleMaskData = extractSingleMask(maskImg, canvas.width, canvas.height, b);
-      // 페더링을 위해 ImageData → Canvas → blur → ImageData
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      const tempCtx = tempCanvas.getContext("2d")!;
-      tempCtx.putImageData(singleMaskData, 0, 0);
-      // 블러 적용
-      const blurCanvas = document.createElement("canvas");
-      blurCanvas.width = canvas.width;
-      blurCanvas.height = canvas.height;
-      const blurCtx = blurCanvas.getContext("2d")!;
-      blurCtx.filter = "blur(6px)";
-      blurCtx.drawImage(tempCanvas, 0, 0);
-      blurCtx.filter = "none";
-      currentFeatheredRef.current = blurCtx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // 현재 컷만의 마스크 캔버스
+      const singleMaskCanvas = extractSingleMaskCanvas(maskImg, canvas.width, canvas.height, b);
+      currentMaskCanvasRef.current = singleMaskCanvas;
+
+      // 페더링
+      currentFeatheredRef.current = createFeatheredMask(singleMaskCanvas, canvas.width, canvas.height);
     }
   }, []);
 
@@ -231,13 +223,16 @@ export default function CapturePage() {
           setupCurrentCut(currentCutRef.current);
         }
 
-        // 배경 이미지 결정: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
-        const bgImage = (compositeCanvasRef.current && totalCuts > 1)
+        // 배경: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
+        const bgImage = (compositeCanvasRef.current && totalCutsRef.current > 1)
           ? compositeCanvasRef.current
           : coverImg;
 
+        // 마스크: 멀티컷이면 현재 컷 전용, 1컷이면 원본
+        const maskToUse = currentMaskCanvasRef.current || maskImg;
+
         compositeMask(
-          ctx, bgImage, maskImg, video, canvas.width, canvas.height,
+          ctx, bgImage, maskToUse, video, canvas.width, canvas.height,
           transformRef.current,
           currentBoundsRef.current!,
           currentFeatheredRef.current!
@@ -293,27 +288,27 @@ export default function CapturePage() {
           startCountdownRef.current();
         }, 2000);
       } else {
-        // 모든 컷 완료
-        if (wmConfigRef.current?.enabled) {
-          const ctx = canvas.getContext("2d")!;
-          drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
-        }
-        addPhoto({
-          id: generateId(),
-          bookCoverId: id,
-          imageData: canvas.toDataURL("image/png"),
-          capturedAt: Date.now(),
-        });
-        // 리셋
-        currentCutRef.current = 0;
-        setCurrentCut(0);
-        setupCurrentCut(0);
-        if (compositeCanvasRef.current && coverImageRef.current) {
+        // 모든 컷 완료 → 합성 캔버스에서 최종 이미지 생성
+        if (compositeCanvasRef.current) {
           const compCtx = compositeCanvasRef.current.getContext("2d")!;
-          compCtx.drawImage(coverImageRef.current, 0, 0, canvas.width, canvas.height);
+          compCtx.drawImage(canvas, 0, 0);
+          // 워터마크
+          if (wmConfigRef.current?.enabled) {
+            drawWatermark(compCtx, canvas.width, canvas.height, wmConfigRef.current);
+          }
+          addPhoto({
+            id: generateId(),
+            bookCoverId: id,
+            imageData: compositeCanvasRef.current.toDataURL("image/png"),
+            capturedAt: Date.now(),
+          });
         }
-        setZoom(1); setOffsetX(0); setOffsetY(0);
-        setShowGuide(true);
+        // 자동으로 결과 화면 이동
+        if (frameBufferRef.current && frameBufferRef.current.length > 0) {
+          usePhotoStore.getState().setGifFrames(frameBufferRef.current.getFramesAsCanvases());
+        }
+        stopCamera();
+        router.push(`/booth/${id}/result`);
       }
     } else {
       // 1컷 모드

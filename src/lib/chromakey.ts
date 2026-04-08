@@ -150,14 +150,15 @@ export function calcMultiMaskBounds(
 }
 
 /**
- * 특정 영역만 추출한 마스크 생성 (멀티컷 촬영용)
+ * 특정 영역만 추출한 마스크 캔버스 생성 (멀티컷 촬영용)
+ * compositeMask에 바로 전달 가능한 Canvas 반환
  */
-export function extractSingleMask(
+export function extractSingleMaskCanvas(
   maskImage: HTMLImageElement | HTMLCanvasElement,
   width: number,
   height: number,
   bounds: MaskBounds
-): ImageData {
+): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -166,13 +167,13 @@ export function extractSingleMask(
   const fullData = ctx.getImageData(0, 0, width, height);
   const pixels = fullData.data;
 
-  // 해당 바운딩박스 밖의 마스크를 검정으로 만듦
+  const pad = 5;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
       const inBounds =
-        x >= bounds.x - 5 && x <= bounds.x + bounds.w + 5 &&
-        y >= bounds.y - 5 && y <= bounds.y + bounds.h + 5;
+        x >= bounds.x - pad && x <= bounds.x + bounds.w + pad &&
+        y >= bounds.y - pad && y <= bounds.y + bounds.h + pad;
       if (!inBounds) {
         pixels[i] = 0;
         pixels[i + 1] = 0;
@@ -181,7 +182,8 @@ export function extractSingleMask(
     }
   }
 
-  return fullData;
+  ctx.putImageData(fullData, 0, 0);
+  return canvas;
 }
 
 /**
