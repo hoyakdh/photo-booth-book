@@ -12,7 +12,7 @@ export default function AdminPage() {
   const { covers, loading, addCover, removeCover, updateCover } = useBookCovers();
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
-  const [rawImage, setRawImage] = useState<string | null>(null); // 원본 이미지 (크로마키 편집 전)
+  const [maskData, setMaskData] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showChromaEditor, setShowChromaEditor] = useState(false);
@@ -24,17 +24,18 @@ export default function AdminPage() {
 
     const dataURL = await fileToDataURL(file);
     const resized = await resizeImage(dataURL);
-    setRawImage(resized);
     setPreview(resized);
+    setMaskData(null); // 새 이미지 → 마스크 초기화
   };
 
   const handleOpenChromaEditor = () => {
-    if (!rawImage && !preview) return;
+    if (!preview) return;
     setShowChromaEditor(true);
   };
 
-  const handleChromaSave = (editedImageData: string) => {
-    setPreview(editedImageData);
+  const handleChromaSave = (originalImage: string, mask: string) => {
+    setPreview(originalImage);
+    setMaskData(mask);
     setShowChromaEditor(false);
   };
 
@@ -52,6 +53,7 @@ export default function AdminPage() {
           id: editingId,
           name: name.trim(),
           imageData: preview,
+          maskData: maskData || undefined,
           createdAt: Date.now(),
         });
         setEditingId(null);
@@ -60,13 +62,14 @@ export default function AdminPage() {
           id: generateId(),
           name: name.trim(),
           imageData: preview,
+          maskData: maskData || undefined,
           createdAt: Date.now(),
         };
         await addCover(cover);
       }
       setName("");
       setPreview(null);
-      setRawImage(null);
+      setMaskData(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
@@ -77,7 +80,7 @@ export default function AdminPage() {
     setEditingId(cover.id);
     setName(cover.name);
     setPreview(cover.imageData);
-    setRawImage(cover.imageData);
+    setMaskData(cover.maskData || null);
   };
 
   const handleDelete = async (id: string) => {
@@ -90,16 +93,17 @@ export default function AdminPage() {
     setEditingId(null);
     setName("");
     setPreview(null);
-    setRawImage(null);
+    setMaskData(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
     <div className="min-h-[100dvh] p-4 max-w-2xl mx-auto">
       {/* 크로마키 편집기 */}
-      {showChromaEditor && (rawImage || preview) && (
+      {showChromaEditor && preview && (
         <ChromaKeyEditor
-          imageData={rawImage || preview!}
+          imageData={preview}
+          existingMask={maskData}
           onSave={handleChromaSave}
           onCancel={handleChromaCancel}
         />
@@ -157,6 +161,11 @@ export default function AdminPage() {
                   alt="미리보기"
                   className="w-full max-h-80 object-contain rounded-xl border-2 border-dashed border-gray-300"
                 />
+                {maskData && (
+                  <span className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-lg font-bold">
+                    크로마키 설정됨
+                  </span>
+                )}
               </div>
 
               {/* 크로마키 편집 버튼 */}
@@ -165,10 +174,10 @@ export default function AdminPage() {
                 className="w-full py-3 bg-green-500 text-white rounded-xl font-bold text-lg btn-touch flex items-center justify-center gap-2"
               >
                 <span className="w-5 h-5 bg-[#00ff00] rounded border border-green-700 inline-block" />
-                크로마키 영역 편집하기
+                {maskData ? "크로마키 영역 다시 편집" : "크로마키 영역 편집하기"}
               </button>
               <p className="text-xs text-gray-400 text-center -mt-2">
-                초록색으로 칠한 부분이 촬영 시 카메라로 보여요
+                칠한 부분만 촬영 시 카메라로 보여요 (책표지의 녹색은 영향 없음)
               </p>
             </>
           )}
@@ -221,6 +230,9 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-400">
                   {new Date(cover.createdAt).toLocaleDateString("ko-KR")}
                 </p>
+                {cover.maskData && (
+                  <span className="text-xs text-green-500 font-medium">크로마키 설정됨</span>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <button

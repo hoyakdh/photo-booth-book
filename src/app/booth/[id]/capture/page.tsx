@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useBookCover } from "@/hooks/useBookCovers";
 import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
-import { getCompositeFunction, CameraTransform } from "@/lib/chromakey";
+import { compositeMask, CameraTransform } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 
@@ -23,6 +23,7 @@ export default function CapturePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
   const coverImageRef = useRef<HTMLImageElement | null>(null);
+  const maskImageRef = useRef<HTMLImageElement | null>(null);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
@@ -83,26 +84,32 @@ export default function CapturePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cover]);
 
-  // 책표지 이미지 로드
+  // 책표지 이미지 + 마스크 로드
   useEffect(() => {
     if (cover) {
       loadImage(cover.imageData).then((img) => {
         coverImageRef.current = img;
       });
+      if (cover.maskData) {
+        loadImage(cover.maskData).then((img) => {
+          maskImageRef.current = img;
+        });
+      }
     }
   }, [cover]);
 
   // 크로마키 실시간 렌더링
   useEffect(() => {
     if (!isReady || !coverImageRef.current || !canvasRef.current || !videoRef.current) return;
+    if (!maskImageRef.current) return; // 마스크 없으면 원본만 표시
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    const composite = getCompositeFunction();
     const video = videoRef.current;
     const coverImg = coverImageRef.current;
+    const maskImg = maskImageRef.current;
 
     const render = () => {
       if (video.readyState >= 2 && coverImg.complete) {
@@ -124,9 +131,8 @@ export default function CapturePage() {
           canvas.height = Math.round(h);
         }
 
-        composite(
-          ctx, coverImg, video, canvas.width, canvas.height,
-          { tolerance: 80, softness: 0.2 },
+        compositeMask(
+          ctx, coverImg, maskImg, video, canvas.width, canvas.height,
           transformRef.current
         );
       }

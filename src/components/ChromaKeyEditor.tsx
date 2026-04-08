@@ -4,31 +4,30 @@ import { useRef, useState, useEffect, useCallback } from "react";
 
 interface ChromaKeyEditorProps {
   imageData: string;
-  onSave: (editedImageData: string) => void;
+  existingMask?: string | null; // 기존 마스크 (수정 시)
+  onSave: (editedImageData: string, maskData: string) => void;
   onCancel: () => void;
 }
 
 type Tool = "brush" | "eraser" | "rect";
 
-export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaKeyEditorProps) {
+export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCancel }: ChromaKeyEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null); // 초록색 오버레이 레이어
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<Tool>("brush");
   const [brushSize, setBrushSize] = useState(30);
   const [isDrawing, setIsDrawing] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // 사각형 도구 상태
   const [rectStart, setRectStart] = useState<{ x: number; y: number } | null>(null);
   const [rectPreview, setRectPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
-  // 캔버스 크기 & 스케일
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
 
-  // 이미지 로드 & 캔버스 설정
+  // 이미지 로드
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
@@ -38,6 +37,7 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     img.src = imageData;
   }, [imageData]);
 
+  // 캔버스 설정 + 기존 마스크 복원
   useEffect(() => {
     if (!imgLoaded || !imgRef.current || !canvasRef.current || !overlayRef.current || !containerRef.current) return;
 
@@ -49,7 +49,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     const containerW = container.clientWidth;
     const containerH = container.clientHeight;
 
-    // 이미지를 컨테이너에 맞게 스케일
     const scale = Math.min(containerW / img.naturalWidth, containerH / img.naturalHeight, 1);
     const displayW = Math.round(img.naturalWidth * scale);
     const displayH = Math.round(img.naturalHeight * scale);
@@ -60,7 +59,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
       y: Math.round((containerH - displayH) / 2),
     };
 
-    // 원본 해상도 캔버스 (표시 크기만 CSS로 조절)
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     canvas.style.width = `${displayW}px`;
@@ -75,12 +73,39 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     overlay.style.left = `${offsetRef.current.x}px`;
     overlay.style.top = `${offsetRef.current.y}px`;
 
-    // 배경 이미지 그리기
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0);
-  }, [imgLoaded]);
 
-  // 터치/마우스 좌표 → 캔버스 좌표 변환
+    // 기존 마스크가 있으면 오버레이에 복원
+    if (existingMask) {
+      const maskImg = new Image();
+      maskImg.onload = () => {
+        const overlayCtx = overlay.getContext("2d")!;
+        // 마스크(흰색 영역)를 초록색 오버레이로 변환하여 표시
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = img.naturalWidth;
+        tempCanvas.height = img.naturalHeight;
+        const tempCtx = tempCanvas.getContext("2d")!;
+        tempCtx.drawImage(maskImg, 0, 0);
+        const maskData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const pixels = maskData.data;
+        // 흰색 → 초록색으로 변환
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i] > 128) { // 흰색 영역
+            pixels[i] = 0;       // R
+            pixels[i + 1] = 255; // G
+            pixels[i + 2] = 0;   // B
+            pixels[i + 3] = 255; // A
+          } else {
+            pixels[i + 3] = 0;   // 투명
+          }
+        }
+        overlayCtx.putImageData(maskData, 0, 0);
+      };
+      maskImg.src = existingMask;
+    }
+  }, [imgLoaded, existingMask]);
+
   const getCanvasPos = useCallback((clientX: number, clientY: number) => {
     if (!overlayRef.current) return { x: 0, y: 0 };
     const rect = overlayRef.current.getBoundingClientRect();
@@ -91,7 +116,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     };
   }, []);
 
-  // 브러시/지우개 그리기
   const drawAt = useCallback((x: number, y: number) => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -114,11 +138,9 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     }
   }, [tool, brushSize]);
 
-  // 포인터 이벤트
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     const pos = getCanvasPos(e.clientX, e.clientY);
-
     if (tool === "rect") {
       setRectStart(pos);
       setRectPreview(null);
@@ -131,7 +153,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     const pos = getCanvasPos(e.clientX, e.clientY);
-
     if (tool === "rect" && rectStart) {
       setRectPreview({
         x: Math.min(rectStart.x, pos.x),
@@ -146,7 +167,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
-
     if (tool === "rect" && rectStart) {
       const pos = getCanvasPos(e.clientX, e.clientY);
       const overlay = overlayRef.current;
@@ -167,7 +187,6 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     }
   }, [tool, rectStart, getCanvasPos]);
 
-  // 전체 초기화
   const handleClear = () => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -175,22 +194,44 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
     ctx.clearRect(0, 0, overlay.width, overlay.height);
   };
 
-  // 저장 (원본 이미지 + 초록 오버레이 합성)
+  // 저장: 원본 이미지 그대로 + 마스크를 별도로 생성
   const handleSave = () => {
-    if (!canvasRef.current || !overlayRef.current || !imgRef.current) return;
+    if (!overlayRef.current || !imgRef.current) return;
 
     const img = imgRef.current;
-    const mergeCanvas = document.createElement("canvas");
-    mergeCanvas.width = img.naturalWidth;
-    mergeCanvas.height = img.naturalHeight;
-    const ctx = mergeCanvas.getContext("2d")!;
+    const overlay = overlayRef.current;
 
-    // 원본 이미지
-    ctx.drawImage(img, 0, 0);
-    // 초록색 오버레이 합성
-    ctx.drawImage(overlayRef.current, 0, 0);
+    // 마스크 생성: 칠한 영역 = 흰색, 나머지 = 검정
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = img.naturalWidth;
+    maskCanvas.height = img.naturalHeight;
+    const maskCtx = maskCanvas.getContext("2d")!;
 
-    onSave(mergeCanvas.toDataURL("image/png"));
+    const overlayCtx = overlay.getContext("2d")!;
+    const overlayData = overlayCtx.getImageData(0, 0, overlay.width, overlay.height);
+    const pixels = overlayData.data;
+
+    // 검정 배경
+    maskCtx.fillStyle = "#000000";
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    const maskPixels = maskData.data;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      // 오버레이에 무언가 칠해진 영역 (alpha > 0)
+      if (pixels[i + 3] > 0) {
+        maskPixels[i] = 255;     // R
+        maskPixels[i + 1] = 255; // G
+        maskPixels[i + 2] = 255; // B
+        maskPixels[i + 3] = 255; // A
+      }
+    }
+    maskCtx.putImageData(maskData, 0, 0);
+
+    const maskDataURL = maskCanvas.toDataURL("image/png");
+
+    // 원본 이미지는 변경하지 않고 그대로 전달
+    onSave(imageData, maskDataURL);
   };
 
   return (
@@ -247,7 +288,7 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
 
       {/* 안내 */}
       <div className="text-center py-1 bg-green-600 text-white text-sm font-medium">
-        초록색으로 칠한 부분이 카메라로 보이는 영역이에요!
+        초록색으로 칠한 부분만 카메라로 보여요!
       </div>
 
       {/* 편집 영역 */}
@@ -260,19 +301,9 @@ export default function ChromaKeyEditor({ imageData, onSave, onCancel }: ChromaK
         onPointerLeave={handlePointerUp}
         style={{ touchAction: "none" }}
       >
-        {/* 배경 이미지 캔버스 */}
-        <canvas
-          ref={canvasRef}
-          className="absolute"
-        />
-        {/* 초록색 오버레이 캔버스 */}
-        <canvas
-          ref={overlayRef}
-          className="absolute"
-          style={{ opacity: 0.7 }}
-        />
+        <canvas ref={canvasRef} className="absolute" />
+        <canvas ref={overlayRef} className="absolute" style={{ opacity: 0.7 }} />
 
-        {/* 사각형 미리보기 */}
         {rectPreview && (
           <div
             className="absolute border-2 border-dashed border-green-400 bg-green-500/30 pointer-events-none"
