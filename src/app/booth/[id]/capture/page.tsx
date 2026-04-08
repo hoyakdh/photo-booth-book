@@ -209,10 +209,12 @@ export default function CapturePage() {
           allBoundsRef.current = bounds;
           setTotalCuts(Math.max(1, bounds.length));
 
-          // 합성 캔버스 초기화
+          // 합성 캔버스 초기화 (책표지로 시작)
           compositeCanvasRef.current = document.createElement("canvas");
           compositeCanvasRef.current.width = canvas.width;
           compositeCanvasRef.current.height = canvas.height;
+          const compInitCtx = compositeCanvasRef.current.getContext("2d")!;
+          compInitCtx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
 
           setupCurrentCut(currentCut);
           updateGuideBounds();
@@ -223,31 +225,24 @@ export default function CapturePage() {
           setupCurrentCut(currentCut);
         }
 
-        // 멀티컷: 이전 컷 결과를 배경으로 사용
-        if (compositeCanvasRef.current && totalCuts > 1) {
-          // 이전까지 촬영된 컷들이 합성된 이미지 + 현재 컷 카메라 합성
-          const compCtx = compositeCanvasRef.current.getContext("2d")!;
-          // 현재 컷만 카메라로 합성
-          compositeMask(
-            ctx, compositeCanvasRef.current, maskImg, video, canvas.width, canvas.height,
-            transformRef.current,
-            currentBoundsRef.current!,
-            currentFeatheredRef.current!
-          );
-        } else {
-          compositeMask(
-            ctx, coverImg, maskImg, video, canvas.width, canvas.height,
-            transformRef.current,
-            currentBoundsRef.current!,
-            currentFeatheredRef.current!
-          );
-        }
+        // 배경 이미지 결정: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
+        const bgImage = (compositeCanvasRef.current && totalCuts > 1)
+          ? compositeCanvasRef.current
+          : coverImg;
+
+        compositeMask(
+          ctx, bgImage, maskImg, video, canvas.width, canvas.height,
+          transformRef.current,
+          currentBoundsRef.current!,
+          currentFeatheredRef.current!
+        );
 
         // GIF용 프레임 캡처
         frameCountRef.current++;
         if (frameCountRef.current % 3 === 0 && frameBufferRef.current) {
           frameBufferRef.current.capture(canvas);
         }
+
       }
       animFrameRef.current = requestAnimationFrame(render);
     };
@@ -257,10 +252,74 @@ export default function CapturePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, videoRef, maskLoaded, currentCut]);
 
-  // 촬영
-  const handleCapture = useCallback(() => {
-    if (countdown !== null) return;
+  // 캡처 실행 (카운트다운 없이 즉시)
+  const doCapture = useCallback(() => {
+    playShutter();
+    setFlash(true);
+    setTimeout(() => setFlash(false), 400);
 
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+
+    if (totalCuts > 1) {
+      // 멀티컷: 현재 캔버스 상태를 합성 캔버스에 저장
+      if (compositeCanvasRef.current) {
+        const compCtx = compositeCanvasRef.current.getContext("2d")!;
+        compCtx.drawImage(canvas, 0, 0);
+      }
+
+      const nextCut = currentCut + 1;
+      if (nextCut < totalCuts) {
+        // 다음 컷 설정
+        setCurrentCut(nextCut);
+        setupCurrentCut(nextCut);
+        setZoom(1); setOffsetX(0); setOffsetY(0);
+        setTimeout(updateGuideBounds, 100);
+
+        // 2초 대기 후 자동으로 다음 카운트다운 시작
+        setTimeout(() => {
+          startCountdown();
+        }, 2000);
+      } else {
+        // 모든 컷 완료
+        if (wmConfigRef.current?.enabled) {
+          const ctx = canvas.getContext("2d")!;
+          drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
+        }
+        addPhoto({
+          id: generateId(),
+          bookCoverId: id,
+          imageData: canvas.toDataURL("image/png"),
+          capturedAt: Date.now(),
+        });
+        // 리셋
+        setCurrentCut(0);
+        setupCurrentCut(0);
+        if (compositeCanvasRef.current && coverImageRef.current) {
+          const compCtx = compositeCanvasRef.current.getContext("2d")!;
+          compCtx.drawImage(coverImageRef.current, 0, 0, canvas.width, canvas.height);
+        }
+        setZoom(1); setOffsetX(0); setOffsetY(0);
+        setShowGuide(true);
+      }
+    } else {
+      // 1컷 모드
+      if (wmConfigRef.current?.enabled) {
+        const ctx = canvas.getContext("2d")!;
+        drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
+      }
+      addPhoto({
+        id: generateId(),
+        bookCoverId: id,
+        imageData: canvas.toDataURL("image/png"),
+        capturedAt: Date.now(),
+      });
+      setShowGuide(true);
+    }
+  }, [totalCuts, currentCut, setupCurrentCut, updateGuideBounds, addPhoto, id]);
+
+  // 카운트다운 시작
+  const startCountdown = useCallback(() => {
     setShowGuide(false);
     let count = 3;
     setCountdown(count);
@@ -274,69 +333,16 @@ export default function CapturePage() {
       } else {
         clearInterval(timer);
         setCountdown(null);
-        playShutter();
-        setFlash(true);
-        setTimeout(() => setFlash(false), 400);
-
-        if (canvasRef.current) {
-          const canvas = canvasRef.current;
-
-          if (totalCuts > 1) {
-            // 멀티컷: 현재 캔버스 상태를 합성 캔버스에 저장
-            const compCanvas = compositeCanvasRef.current;
-            if (compCanvas) {
-              const compCtx = compCanvas.getContext("2d")!;
-              compCtx.drawImage(canvas, 0, 0);
-            }
-
-            const nextCut = currentCut + 1;
-            if (nextCut < totalCuts) {
-              // 다음 컷으로
-              setCurrentCut(nextCut);
-              setupCurrentCut(nextCut);
-              setZoom(1); setOffsetX(0); setOffsetY(0);
-              setShowGuide(true);
-              setTimeout(updateGuideBounds, 100);
-            } else {
-              // 모든 컷 완료 → 워터마크 적용 후 저장
-              if (wmConfigRef.current?.enabled) {
-                const ctx = canvas.getContext("2d")!;
-                drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
-              }
-              addPhoto({
-                id: generateId(),
-                bookCoverId: id,
-                imageData: canvas.toDataURL("image/png"),
-                capturedAt: Date.now(),
-              });
-              // 리셋 (다시 촬영 가능)
-              setCurrentCut(0);
-              setupCurrentCut(0);
-              if (compositeCanvasRef.current && coverImageRef.current) {
-                const compCtx = compositeCanvasRef.current.getContext("2d")!;
-                compCtx.drawImage(coverImageRef.current, 0, 0, canvas.width, canvas.height);
-              }
-              setZoom(1); setOffsetX(0); setOffsetY(0);
-              setShowGuide(true);
-            }
-          } else {
-            // 1컷 모드
-            if (wmConfigRef.current?.enabled) {
-              const ctx = canvas.getContext("2d")!;
-              drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
-            }
-            addPhoto({
-              id: generateId(),
-              bookCoverId: id,
-              imageData: canvas.toDataURL("image/png"),
-              capturedAt: Date.now(),
-            });
-            setShowGuide(true);
-          }
-        }
+        doCapture();
       }
     }, 1000);
-  }, [countdown, id, addPhoto, totalCuts, currentCut, setupCurrentCut, updateGuideBounds]);
+  }, [doCapture]);
+
+  // 셔터 버튼 (첫 촬영 시작)
+  const handleCapture = useCallback(() => {
+    if (countdown !== null) return;
+    startCountdown();
+  }, [countdown, startCountdown]);
 
   // 결과 보기
   const setGifFrames = usePhotoStore((s) => s.setGifFrames);
