@@ -1,0 +1,374 @@
+"use client";
+
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useBookCover } from "@/hooks/useBookCovers";
+import { useCamera } from "@/hooks/useCamera";
+import { usePhotoStore } from "@/store/usePhotoStore";
+import { getCompositeFunction, CameraTransform } from "@/lib/chromakey";
+import { generateId, loadImage } from "@/lib/utils";
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
+const ZOOM_STEP = 0.1;
+
+export default function CapturePage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { cover, loading: coverLoading } = useBookCover(id);
+  const { videoRef, isReady, error, startCamera, stopCamera } = useCamera();
+  const addPhoto = usePhotoStore((s) => s.addPhoto);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animFrameRef = useRef<number>(0);
+  const coverImageRef = useRef<HTMLImageElement | null>(null);
+
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [flash, setFlash] = useState(false);
+  const [cameraStarted, setCameraStarted] = useState(false);
+
+  // 줌 & 이동 상태
+  const [zoom, setZoom] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
+  const [showZoomUI, setShowZoomUI] = useState(false);
+
+  // 줌 상태를 ref로 실시간 접근 (렌더 루프에서 사용)
+  const transformRef = useRef<CameraTransform>({ zoom: 1, offsetX: 0, offsetY: 0 });
+  useEffect(() => {
+    transformRef.current = { zoom, offsetX, offsetY };
+  }, [zoom, offsetX, offsetY]);
+
+  // 핀치 줌 지원
+  const lastPinchDistRef = useRef<number | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastPinchDistRef.current = Math.hypot(dx, dy);
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const diff = dist - lastPinchDistRef.current;
+
+      setZoom((prev) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev + diff * 0.01)));
+      lastPinchDistRef.current = dist;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    lastPinchDistRef.current = null;
+  }, []);
+
+  // 카메라 시작
+  useEffect(() => {
+    if (cover && !cameraStarted) {
+      startCamera().then(() => setCameraStarted(true));
+    }
+    return () => {
+      stopCamera();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cover]);
+
+  // 책표지 이미지 로드
+  useEffect(() => {
+    if (cover) {
+      loadImage(cover.imageData).then((img) => {
+        coverImageRef.current = img;
+      });
+    }
+  }, [cover]);
+
+  // 크로마키 실시간 렌더링
+  useEffect(() => {
+    if (!isReady || !coverImageRef.current || !canvasRef.current || !videoRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    const composite = getCompositeFunction();
+    const video = videoRef.current;
+    const coverImg = coverImageRef.current;
+
+    const render = () => {
+      if (video.readyState >= 2 && coverImg.complete) {
+        const aspect = coverImg.naturalWidth / coverImg.naturalHeight;
+        const containerW = canvas.parentElement?.clientWidth || 360;
+        const containerH = canvas.parentElement?.clientHeight || 640;
+
+        let w: number, h: number;
+        if (containerW / containerH < aspect) {
+          w = containerW;
+          h = containerW / aspect;
+        } else {
+          h = containerH;
+          w = containerH * aspect;
+        }
+
+        if (canvas.width !== Math.round(w) || canvas.height !== Math.round(h)) {
+          canvas.width = Math.round(w);
+          canvas.height = Math.round(h);
+        }
+
+        composite(
+          ctx, coverImg, video, canvas.width, canvas.height,
+          { tolerance: 80, softness: 0.2 },
+          transformRef.current
+        );
+      }
+      animFrameRef.current = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isReady, videoRef]);
+
+  // 촬영 (카운트다운 → 캡처)
+  const handleCapture = useCallback(() => {
+    if (countdown !== null) return;
+
+    let count = 3;
+    setCountdown(count);
+
+    const timer = setInterval(() => {
+      count--;
+      if (count > 0) {
+        setCountdown(count);
+      } else {
+        clearInterval(timer);
+        setCountdown(null);
+
+        setFlash(true);
+        setTimeout(() => setFlash(false), 400);
+
+        if (canvasRef.current) {
+          const imageData = canvasRef.current.toDataURL("image/png");
+          addPhoto({
+            id: generateId(),
+            bookCoverId: id,
+            imageData,
+            capturedAt: Date.now(),
+          });
+        }
+      }
+    }, 1000);
+  }, [countdown, id, addPhoto]);
+
+  // 결과 보기
+  const handleViewResults = () => {
+    stopCamera();
+    router.push(`/booth/${id}/result`);
+  };
+
+  const photos = usePhotoStore((s) => s.capturedPhotos);
+
+  if (coverLoading) {
+    return (
+      <div className="h-screen-safe flex items-center justify-center">
+        <div className="text-xl text-gray-400">불러오는 중...</div>
+      </div>
+    );
+  }
+
+  if (!cover) {
+    return (
+      <div className="h-screen-safe flex flex-col items-center justify-center gap-4">
+        <p className="text-xl text-gray-500">책을 찾을 수 없어요</p>
+        <button onClick={() => router.push("/")} className="px-6 py-3 bg-primary text-white rounded-2xl font-bold btn-touch">
+          돌아가기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen-safe flex flex-col bg-black relative overflow-hidden">
+      {/* 숨김 비디오 (카메라 소스) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute opacity-0 pointer-events-none"
+        style={{ width: 1, height: 1 }}
+      />
+
+      {/* 크로마키 합성 캔버스 */}
+      <div
+        className="flex-1 flex items-center justify-center relative"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <canvas ref={canvasRef} className="max-w-full max-h-full" />
+
+        {/* 카메라 에러 */}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="text-center text-white p-6">
+              <p className="text-2xl mb-4">{error}</p>
+              <button
+                onClick={() => startCamera()}
+                className="px-6 py-3 bg-primary text-white rounded-2xl font-bold btn-touch"
+              >
+                다시 시도
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 카운트다운 오버레이 */}
+        {countdown !== null && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+            <span
+              key={countdown}
+              className="text-[12rem] font-black text-white drop-shadow-2xl animate-countdown"
+            >
+              {countdown}
+            </span>
+          </div>
+        )}
+
+        {/* 플래시 효과 */}
+        {flash && (
+          <div className="absolute inset-0 bg-white z-30 animate-flash" />
+        )}
+
+        {/* 줌 컨트롤 (우측 사이드) */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+          <button
+            onClick={() => setShowZoomUI((v) => !v)}
+            className="w-10 h-10 bg-black/50 backdrop-blur rounded-full flex items-center justify-center text-white text-lg font-bold btn-touch"
+          >
+            {zoom > 1 ? `${zoom.toFixed(1)}x` : "ZM"}
+          </button>
+
+          {showZoomUI && (
+            <div className="flex flex-col items-center gap-1 bg-black/60 backdrop-blur rounded-2xl p-2">
+              {/* 줌 인 */}
+              <button
+                onClick={() => setZoom((v) => Math.min(MAX_ZOOM, +(v + ZOOM_STEP).toFixed(1)))}
+                className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-2xl font-bold btn-touch"
+              >
+                +
+              </button>
+
+              {/* 수직 줌 슬라이더 */}
+              <div className="relative h-40 w-10 flex items-center justify-center">
+                <input
+                  type="range"
+                  min={MIN_ZOOM * 10}
+                  max={MAX_ZOOM * 10}
+                  value={zoom * 10}
+                  onChange={(e) => setZoom(Number(e.target.value) / 10)}
+                  className="absolute w-40 origin-center -rotate-90"
+                  style={{ appearance: "auto" }}
+                />
+              </div>
+
+              {/* 줌 아웃 */}
+              <button
+                onClick={() => setZoom((v) => Math.max(MIN_ZOOM, +(v - ZOOM_STEP).toFixed(1)))}
+                className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-2xl font-bold btn-touch"
+              >
+                -
+              </button>
+
+              {/* 리셋 */}
+              <button
+                onClick={() => { setZoom(1); setOffsetX(0); setOffsetY(0); }}
+                className="w-10 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white text-xs font-bold btn-touch mt-1"
+              >
+                리셋
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 위치 조절 패드 (줌 > 1일 때만) */}
+        {zoom > 1 && showZoomUI && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+            <div className="bg-black/60 backdrop-blur rounded-2xl p-2 flex flex-col items-center gap-1">
+              <p className="text-white text-[10px] mb-1">위치</p>
+              <button
+                onClick={() => setOffsetY((v) => Math.max(-1, +(v - 0.1).toFixed(1)))}
+                className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white text-lg btn-touch"
+              >
+                ▲
+              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setOffsetX((v) => Math.max(-1, +(v - 0.1).toFixed(1)))}
+                  className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white text-lg btn-touch"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => { setOffsetX(0); setOffsetY(0); }}
+                  className="w-10 h-10 bg-white/30 rounded-lg flex items-center justify-center text-white text-xs font-bold btn-touch"
+                >
+                  중앙
+                </button>
+                <button
+                  onClick={() => setOffsetX((v) => Math.min(1, +(v + 0.1).toFixed(1)))}
+                  className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white text-lg btn-touch"
+                >
+                  ▶
+                </button>
+              </div>
+              <button
+                onClick={() => setOffsetY((v) => Math.min(1, +(v + 0.1).toFixed(1)))}
+                className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white text-lg btn-touch"
+              >
+                ▼
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 하단 컨트롤 */}
+      <div className="flex items-center justify-between px-6 py-4 bg-black/80">
+        {/* 뒤로가기 */}
+        <button
+          onClick={() => {
+            stopCamera();
+            router.push(`/booth/${id}`);
+          }}
+          className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch"
+        >
+          &larr;
+        </button>
+
+        {/* 셔터 버튼 */}
+        <button
+          onClick={handleCapture}
+          disabled={!isReady || countdown !== null}
+          className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch"
+        >
+          <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
+        </button>
+
+        {/* 결과 보기 */}
+        <button
+          onClick={handleViewResults}
+          disabled={photos.length === 0}
+          className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-30 btn-touch"
+        >
+          {photos.length > 0 ? photos.length : ""}
+        </button>
+      </div>
+    </div>
+  );
+}
