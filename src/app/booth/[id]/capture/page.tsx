@@ -251,6 +251,42 @@ export default function CapturePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, videoRef, maskLoaded]);
 
+  // 원본 해상도로 고화질 캡처 렌더링
+  const hiResCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const renderHiRes = useCallback(() => {
+    const coverImg = coverImageRef.current;
+    const maskImg = maskImageRef.current;
+    const video = videoRef.current;
+    if (!coverImg || !maskImg || !video) return null;
+
+    const w = coverImg.naturalWidth;
+    const h = coverImg.naturalHeight;
+
+    if (!hiResCanvasRef.current) {
+      hiResCanvasRef.current = document.createElement("canvas");
+    }
+    const hrc = hiResCanvasRef.current;
+    hrc.width = w;
+    hrc.height = h;
+    const ctx = hrc.getContext("2d", { willReadFrequently: true })!;
+
+    // 현재 컷 전용 마스크를 원본 해상도로 생성
+    const maskToUse = currentMaskCanvasRef.current
+      ? (() => {
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d")!.drawImage(currentMaskCanvasRef.current!, 0, 0, w, h);
+          return c;
+        })()
+      : maskImg;
+
+    const bounds = calcMaskBounds(maskToUse, w, h);
+    const feathered = createFeatheredMask(maskToUse, w, h);
+
+    compositeMask(ctx, coverImg, maskToUse, video, w, h, transformRef.current, bounds, feathered);
+    return hrc;
+  }, [videoRef]);
+
   // ref 기반 캡처/카운트다운 (stale closure 방지)
   const doCaptureRef = useRef<() => void>(() => {});
   const startCountdownRef = useRef<() => void>(() => {});
@@ -265,34 +301,40 @@ export default function CapturePage() {
     const cuts = totalCutsRef.current;
     const cut = currentCutRef.current;
 
+    // 고화질 렌더링
+    const hiRes = renderHiRes();
+
     if (cuts > 1) {
-      // 멀티컷: 합성 캔버스에 현재 상태 저장
-      if (compositeCanvasRef.current) {
+      // 멀티컷: 고화질 합성 캔버스에 저장
+      if (compositeCanvasRef.current && hiRes) {
+        // 합성 캔버스를 원본 해상도로 업그레이드 (최초)
+        const coverImg = coverImageRef.current!;
+        if (compositeCanvasRef.current.width !== coverImg.naturalWidth) {
+          const oldComp = compositeCanvasRef.current;
+          compositeCanvasRef.current = document.createElement("canvas");
+          compositeCanvasRef.current.width = coverImg.naturalWidth;
+          compositeCanvasRef.current.height = coverImg.naturalHeight;
+          const ctx = compositeCanvasRef.current.getContext("2d")!;
+          ctx.drawImage(oldComp, 0, 0, coverImg.naturalWidth, coverImg.naturalHeight);
+        }
         const compCtx = compositeCanvasRef.current.getContext("2d")!;
-        compCtx.drawImage(canvas, 0, 0);
+        compCtx.drawImage(hiRes, 0, 0);
       }
 
       const nextCut = cut + 1;
       if (nextCut < cuts) {
-        // 다음 컷 설정
         currentCutRef.current = nextCut;
         setCurrentCut(nextCut);
         setupCurrentCut(nextCut);
         setZoom(1); setOffsetX(0); setOffsetY(0);
         setTimeout(updateGuideBounds, 100);
-
-        // 2초 대기 후 자동 다음 촬영
-        setTimeout(() => {
-          startCountdownRef.current();
-        }, 2000);
+        setTimeout(() => { startCountdownRef.current(); }, 2000);
       } else {
-        // 모든 컷 완료 → 합성 캔버스에서 최종 이미지 생성
+        // 모든 컷 완료
         if (compositeCanvasRef.current) {
-          const compCtx = compositeCanvasRef.current.getContext("2d")!;
-          compCtx.drawImage(canvas, 0, 0);
-          // 워터마크
           if (wmConfigRef.current?.enabled) {
-            drawWatermark(compCtx, canvas.width, canvas.height, wmConfigRef.current);
+            const compCtx = compositeCanvasRef.current.getContext("2d")!;
+            drawWatermark(compCtx, compositeCanvasRef.current.width, compositeCanvasRef.current.height, wmConfigRef.current);
           }
           addPhoto({
             id: generateId(),
@@ -301,7 +343,6 @@ export default function CapturePage() {
             capturedAt: Date.now(),
           });
         }
-        // 자동으로 결과 화면 이동
         if (frameBufferRef.current && frameBufferRef.current.length > 0) {
           usePhotoStore.getState().setGifFrames(frameBufferRef.current.getFramesAsCanvases());
         }
@@ -309,17 +350,19 @@ export default function CapturePage() {
         router.push(`/booth/${id}/result`);
       }
     } else {
-      // 1컷 모드
-      if (wmConfigRef.current?.enabled) {
-        const ctx = canvas.getContext("2d")!;
-        drawWatermark(ctx, canvas.width, canvas.height, wmConfigRef.current);
+      // 1컷 모드: 고화질 캡처
+      if (hiRes) {
+        if (wmConfigRef.current?.enabled) {
+          const ctx = hiRes.getContext("2d")!;
+          drawWatermark(ctx, hiRes.width, hiRes.height, wmConfigRef.current);
+        }
+        addPhoto({
+          id: generateId(),
+          bookCoverId: id,
+          imageData: hiRes.toDataURL("image/png"),
+          capturedAt: Date.now(),
+        });
       }
-      addPhoto({
-        id: generateId(),
-        bookCoverId: id,
-        imageData: canvas.toDataURL("image/png"),
-        capturedAt: Date.now(),
-      });
       setShowGuide(true);
     }
   };
