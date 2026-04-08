@@ -42,7 +42,9 @@ export default function CapturePage() {
   const compositeCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [totalCuts, setTotalCuts] = useState(1);
-  const [currentCut, setCurrentCut] = useState(0); // 0-based, 현재 촬영할 컷
+  const totalCutsRef = useRef(1);
+  const [currentCut, setCurrentCut] = useState(0);
+  const currentCutRef = useRef(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
   const [cameraStarted, setCameraStarted] = useState(false);
@@ -204,25 +206,29 @@ export default function CapturePage() {
           canvas.width = Math.round(w);
           canvas.height = Math.round(h);
 
-          // 멀티컷 영역 감지
-          const bounds = calcMultiMaskBounds(maskImg, canvas.width, canvas.height);
-          allBoundsRef.current = bounds;
-          setTotalCuts(Math.max(1, bounds.length));
+          // 멀티컷 영역 감지 (최초 1회만)
+          if (!initialized) {
+            const bounds = calcMultiMaskBounds(maskImg, canvas.width, canvas.height);
+            allBoundsRef.current = bounds;
+            const cuts = Math.max(1, bounds.length);
+            setTotalCuts(cuts);
+            totalCutsRef.current = cuts;
 
-          // 합성 캔버스 초기화 (책표지로 시작)
-          compositeCanvasRef.current = document.createElement("canvas");
-          compositeCanvasRef.current.width = canvas.width;
-          compositeCanvasRef.current.height = canvas.height;
-          const compInitCtx = compositeCanvasRef.current.getContext("2d")!;
-          compInitCtx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
+            // 합성 캔버스 초기화 (책표지로 시작)
+            compositeCanvasRef.current = document.createElement("canvas");
+            compositeCanvasRef.current.width = canvas.width;
+            compositeCanvasRef.current.height = canvas.height;
+            const compInitCtx = compositeCanvasRef.current.getContext("2d")!;
+            compInitCtx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
+          }
 
-          setupCurrentCut(currentCut);
+          setupCurrentCut(currentCutRef.current);
           updateGuideBounds();
           initialized = true;
         }
 
         if (!currentBoundsRef.current || !currentFeatheredRef.current) {
-          setupCurrentCut(currentCut);
+          setupCurrentCut(currentCutRef.current);
         }
 
         // 배경 이미지 결정: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
@@ -250,35 +256,41 @@ export default function CapturePage() {
     render();
     return () => { cancelAnimationFrame(animFrameRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, videoRef, maskLoaded, currentCut]);
+  }, [isReady, videoRef, maskLoaded]);
 
-  // 캡처 실행 (카운트다운 없이 즉시)
-  const doCapture = useCallback(() => {
+  // ref 기반 캡처/카운트다운 (stale closure 방지)
+  const doCaptureRef = useRef<() => void>(() => {});
+  const startCountdownRef = useRef<() => void>(() => {});
+
+  doCaptureRef.current = () => {
     playShutter();
     setFlash(true);
     setTimeout(() => setFlash(false), 400);
 
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
+    const cuts = totalCutsRef.current;
+    const cut = currentCutRef.current;
 
-    if (totalCuts > 1) {
-      // 멀티컷: 현재 캔버스 상태를 합성 캔버스에 저장
+    if (cuts > 1) {
+      // 멀티컷: 합성 캔버스에 현재 상태 저장
       if (compositeCanvasRef.current) {
         const compCtx = compositeCanvasRef.current.getContext("2d")!;
         compCtx.drawImage(canvas, 0, 0);
       }
 
-      const nextCut = currentCut + 1;
-      if (nextCut < totalCuts) {
+      const nextCut = cut + 1;
+      if (nextCut < cuts) {
         // 다음 컷 설정
+        currentCutRef.current = nextCut;
         setCurrentCut(nextCut);
         setupCurrentCut(nextCut);
         setZoom(1); setOffsetX(0); setOffsetY(0);
         setTimeout(updateGuideBounds, 100);
 
-        // 2초 대기 후 자동으로 다음 카운트다운 시작
+        // 2초 대기 후 자동 다음 촬영
         setTimeout(() => {
-          startCountdown();
+          startCountdownRef.current();
         }, 2000);
       } else {
         // 모든 컷 완료
@@ -293,6 +305,7 @@ export default function CapturePage() {
           capturedAt: Date.now(),
         });
         // 리셋
+        currentCutRef.current = 0;
         setCurrentCut(0);
         setupCurrentCut(0);
         if (compositeCanvasRef.current && coverImageRef.current) {
@@ -316,10 +329,9 @@ export default function CapturePage() {
       });
       setShowGuide(true);
     }
-  }, [totalCuts, currentCut, setupCurrentCut, updateGuideBounds, addPhoto, id]);
+  };
 
-  // 카운트다운 시작
-  const startCountdown = useCallback(() => {
+  startCountdownRef.current = () => {
     setShowGuide(false);
     let count = 3;
     setCountdown(count);
@@ -333,16 +345,15 @@ export default function CapturePage() {
       } else {
         clearInterval(timer);
         setCountdown(null);
-        doCapture();
+        doCaptureRef.current();
       }
     }, 1000);
-  }, [doCapture]);
+  };
 
-  // 셔터 버튼 (첫 촬영 시작)
   const handleCapture = useCallback(() => {
     if (countdown !== null) return;
-    startCountdown();
-  }, [countdown, startCountdown]);
+    startCountdownRef.current();
+  }, [countdown]);
 
   // 결과 보기
   const setGifFrames = usePhotoStore((s) => s.setGifFrames);
