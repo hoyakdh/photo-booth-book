@@ -50,7 +50,7 @@ export default function BoothStartPage() {
       {/* 책표지 꽉 찬 화면 */}
       <div className="flex-1 relative overflow-hidden">
         <img
-          src={cover.imageData}
+          src={cover.previewData || cover.imageData}
           alt={cover.name}
           className="w-full h-full object-contain"
         />
