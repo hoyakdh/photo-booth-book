@@ -50,7 +50,8 @@ export default function CapturePage() {
   const [cameraStarted, setCameraStarted] = useState(false);
   const [maskLoaded, setMaskLoaded] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
-  const [guideBounds, setGuideBounds] = useState<{ left: string; top: string; width: string; height: string } | null>(null);
+  // 가이드 좌표: 캔버스 내부 비율 (0~1)
+  const [guideRect, setGuideRect] = useState<{ rx: number; ry: number; rw: number; rh: number } | null>(null);
 
   // 줌
   const [zoom, setZoom] = useState(1);
@@ -145,17 +146,16 @@ export default function CapturePage() {
     }
   }, []);
 
-  // 가이드 좌표 업데이트 (캔버스 내부 % 기준)
+  // 가이드 좌표 업데이트 (캔버스 내부 비율)
   const updateGuideBounds = useCallback(() => {
     if (!canvasRef.current || !currentBoundsRef.current) return;
     const canvas = canvasRef.current;
     const b = currentBoundsRef.current;
-    // 캔버스 내부 좌표를 % 비율로 변환
-    setGuideBounds({
-      left: `${(b.x / canvas.width) * 100}%`,
-      top: `${(b.y / canvas.height) * 100}%`,
-      width: `${(b.w / canvas.width) * 100}%`,
-      height: `${(b.h / canvas.height) * 100}%`,
+    setGuideRect({
+      rx: b.x / canvas.width,
+      ry: b.y / canvas.height,
+      rw: b.w / canvas.width,
+      rh: b.h / canvas.height,
     });
   }, []);
 
@@ -412,21 +412,34 @@ export default function CapturePage() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="relative max-w-full max-h-full">
+        <div className="relative flex items-center justify-center w-full h-full">
           <canvas ref={canvasRef} className="block max-w-full max-h-full" />
-          {/* 촬영 가이드 (캔버스 기준 % 좌표) */}
-          {showGuide && guideBounds && countdown === null && (
+        </div>
+
+        {/* 촬영 가이드 */}
+        {showGuide && guideRect && countdown === null && canvasRef.current && (() => {
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const parent = canvasRef.current!.parentElement?.getBoundingClientRect();
+          if (!parent) return null;
+          const offsetLeft = rect.left - parent.left;
+          const offsetTop = rect.top - parent.top;
+          return (
             <div
               className="absolute z-10 pointer-events-none flex items-center justify-center"
-              style={{ left: guideBounds.left, top: guideBounds.top, width: guideBounds.width, height: guideBounds.height }}
+              style={{
+                left: offsetLeft + guideRect.rx * rect.width,
+                top: offsetTop + guideRect.ry * rect.height,
+                width: guideRect.rw * rect.width,
+                height: guideRect.rh * rect.height,
+              }}
             >
               <div className="absolute inset-0 border-[3px] border-dashed border-white/60 rounded-2xl animate-pulse" />
               <p className="text-white/70 text-sm font-bold bg-black/30 px-3 py-1.5 rounded-full">
                 여기에 얼굴을 맞춰주세요
               </p>
             </div>
-          )}
-        </div>
+          );
+        })()}
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
