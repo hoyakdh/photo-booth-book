@@ -61,6 +61,130 @@ export function calcMaskBounds(
 }
 
 /**
+ * 마스크에서 연결된 영역(connected components)을 분리하여
+ * 각 영역의 바운딩박스를 반환. 왼쪽위→오른쪽위→왼쪽아래→오른쪽아래 순서로 정렬.
+ */
+export function calcMultiMaskBounds(
+  maskImage: HTMLImageElement | HTMLCanvasElement,
+  width: number,
+  height: number
+): MaskBounds[] {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(maskImage, 0, 0, width, height);
+  const data = ctx.getImageData(0, 0, width, height).data;
+
+  // 이진 마스크 생성
+  const mask = new Uint8Array(width * height);
+  for (let i = 0; i < mask.length; i++) {
+    mask[i] = data[i * 4] > 128 ? 1 : 0;
+  }
+
+  // Connected component labeling (flood fill)
+  const labels = new Int32Array(width * height);
+  let labelCount = 0;
+
+  const flood = (startX: number, startY: number, label: number) => {
+    const stack: [number, number][] = [[startX, startY]];
+    while (stack.length > 0) {
+      const [cx, cy] = stack.pop()!;
+      const idx = cy * width + cx;
+      if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
+      if (mask[idx] !== 1 || labels[idx] !== 0) continue;
+      labels[idx] = label;
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+  };
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (mask[idx] === 1 && labels[idx] === 0) {
+        labelCount++;
+        flood(x, y, labelCount);
+      }
+    }
+  }
+
+  // 각 라벨의 바운딩박스 계산
+  const boundsMap = new Map<number, { minX: number; minY: number; maxX: number; maxY: number }>();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const label = labels[y * width + x];
+      if (label === 0) continue;
+      const b = boundsMap.get(label);
+      if (!b) {
+        boundsMap.set(label, { minX: x, minY: y, maxX: x, maxY: y });
+      } else {
+        if (x < b.minX) b.minX = x;
+        if (x > b.maxX) b.maxX = x;
+        if (y < b.minY) b.minY = y;
+        if (y > b.maxY) b.maxY = y;
+      }
+    }
+  }
+
+  // 너무 작은 영역 필터링 (전체 면적의 0.5% 미만)
+  const minArea = width * height * 0.005;
+  const results: MaskBounds[] = [];
+  for (const [, b] of boundsMap) {
+    const w = b.maxX - b.minX + 1;
+    const h = b.maxY - b.minY + 1;
+    if (w * h >= minArea) {
+      results.push({ x: b.minX, y: b.minY, w, h });
+    }
+  }
+
+  // 왼쪽위→오른쪽위→왼쪽아래→오른쪽아래 순서로 정렬
+  results.sort((a, b) => {
+    const rowA = a.y + a.h / 2;
+    const rowB = b.y + b.h / 2;
+    const rowThreshold = height * 0.2;
+    if (Math.abs(rowA - rowB) > rowThreshold) return rowA - rowB; // 다른 행
+    return (a.x + a.w / 2) - (b.x + b.w / 2); // 같은 행 → 왼쪽 우선
+  });
+
+  return results;
+}
+
+/**
+ * 특정 영역만 추출한 마스크 생성 (멀티컷 촬영용)
+ */
+export function extractSingleMask(
+  maskImage: HTMLImageElement | HTMLCanvasElement,
+  width: number,
+  height: number,
+  bounds: MaskBounds
+): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(maskImage, 0, 0, width, height);
+  const fullData = ctx.getImageData(0, 0, width, height);
+  const pixels = fullData.data;
+
+  // 해당 바운딩박스 밖의 마스크를 검정으로 만듦
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const inBounds =
+        x >= bounds.x - 5 && x <= bounds.x + bounds.w + 5 &&
+        y >= bounds.y - 5 && y <= bounds.y + bounds.h + 5;
+      if (!inBounds) {
+        pixels[i] = 0;
+        pixels[i + 1] = 0;
+        pixels[i + 2] = 0;
+      }
+    }
+  }
+
+  return fullData;
+}
+
+/**
  * A. 엣지 페더링: 마스크를 블러 처리하여 부드러운 경계 생성
  * 최초 1회 호출 후 캐싱하여 사용
  */
