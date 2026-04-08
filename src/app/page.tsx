@@ -45,7 +45,7 @@ export default function HomePage() {
               >
                 <div className="aspect-[3/4] overflow-hidden">
                   <img
-                    src={cover.imageData}
+                    src={cover.previewData || cover.imageData}
                     alt={cover.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
