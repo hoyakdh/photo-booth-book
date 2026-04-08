@@ -144,8 +144,11 @@ export function compositeMask(
   }
 }
 
+const FEATHER_PADDING = 20; // 페더링 반경보다 넉넉하게
+
 /**
  * 카메라를 마스크 바운딩박스에 맞춰 그리기
+ * 페더링 영역까지 카메라가 채워지도록 패딩 추가
  */
 function drawCameraToMaskArea(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
@@ -157,10 +160,19 @@ function drawCameraToMaskArea(
 ) {
   const { zoom, offsetX, offsetY } = transform;
 
+  // 페더링 영역까지 커버하도록 바운딩박스 확장
+  const pad = FEATHER_PADDING;
+  const ex = Math.max(0, bounds.x - pad);
+  const ey = Math.max(0, bounds.y - pad);
+  const ex2 = Math.min(canvasWidth, bounds.x + bounds.w + pad);
+  const ey2 = Math.min(canvasHeight, bounds.y + bounds.h + pad);
+  const ew = ex2 - ex;
+  const eh = ey2 - ey;
+
   const camW = "videoWidth" in cameraFrame ? cameraFrame.videoWidth : cameraFrame.width;
   const camH = "videoHeight" in cameraFrame ? cameraFrame.videoHeight : cameraFrame.height;
 
-  const boundsAspect = bounds.w / bounds.h;
+  const boundsAspect = ew / eh;
   const camAspect = camW / camH;
 
   let srcW: number, srcH: number;
@@ -183,12 +195,12 @@ function drawCameraToMaskArea(
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   ctx.save();
-  ctx.translate(bounds.x + bounds.w, bounds.y);
+  ctx.translate(ex + ew, ey);
   ctx.scale(-1, 1);
   ctx.drawImage(
     cameraFrame,
     srcX, srcY, srcW, srcH,
-    0, 0, bounds.w, bounds.h
+    0, 0, ew, eh
   );
   ctx.restore();
 }
