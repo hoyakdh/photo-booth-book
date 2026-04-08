@@ -43,11 +43,11 @@ export default function HomePage() {
                 onClick={() => router.push(`/booth/${cover.id}`)}
                 className="group bg-white rounded-2xl shadow-lg overflow-hidden border-2 border-transparent hover:border-primary active:scale-95 transition-all duration-200"
               >
-                <div className="aspect-[3/4] overflow-hidden">
+                <div className="aspect-[3/4] overflow-hidden bg-gray-50 flex items-center justify-center">
                   <img
                     src={cover.previewData || cover.imageData}
                     alt={cover.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
                 <div className="p-2 text-center">
