@@ -200,6 +200,100 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     ctx.clearRect(0, 0, overlay.width, overlay.height);
   };
 
+  // 흰색 영역 자동 감지
+  const handleAutoDetectWhite = () => {
+    if (!imgRef.current || !overlayRef.current) return;
+    const img = imgRef.current;
+    const overlay = overlayRef.current;
+
+    // 원본 이미지에서 픽셀 읽기
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = img.naturalWidth;
+    tempCanvas.height = img.naturalHeight;
+    const tempCtx = tempCanvas.getContext("2d")!;
+    tempCtx.drawImage(img, 0, 0);
+    const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const px = imgData.data;
+
+    // 오버레이 초기화
+    const overlayCtx = overlay.getContext("2d")!;
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+    // 흰색/거의 흰색 픽셀 감지 (R>235, G>235, B>235)
+    const w = tempCanvas.width;
+    const h = tempCanvas.height;
+    const whiteMask = new Uint8Array(w * h);
+    for (let i = 0; i < whiteMask.length; i++) {
+      const r = px[i * 4];
+      const g = px[i * 4 + 1];
+      const b = px[i * 4 + 2];
+      if (r > 235 && g > 235 && b > 235) {
+        whiteMask[i] = 1;
+      }
+    }
+
+    // Connected component로 영역 분리 → 작은 영역 제거
+    const labels = new Int32Array(w * h);
+    let labelCount = 0;
+    const flood = (sx: number, sy: number, label: number) => {
+      const stack: [number, number][] = [[sx, sy]];
+      let area = 0;
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop()!;
+        const idx = cy * w + cx;
+        if (cx < 0 || cx >= w || cy < 0 || cy >= h) continue;
+        if (whiteMask[idx] !== 1 || labels[idx] !== 0) continue;
+        labels[idx] = label;
+        area++;
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+      return area;
+    };
+
+    const minArea = w * h * 0.02; // 전체의 2% 이상인 영역만
+    const validLabels = new Set<number>();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (whiteMask[idx] === 1 && labels[idx] === 0) {
+          labelCount++;
+          const area = flood(x, y, labelCount);
+          if (area >= minArea) {
+            validLabels.add(labelCount);
+          }
+        }
+      }
+    }
+
+    // 유효한 영역을 오버레이에 초록색으로 표시
+    // 오버레이 크기에 맞게 스케일
+    const scaleX = overlay.width / w;
+    const scaleY = overlay.height / h;
+
+    const overlayData = overlayCtx.createImageData(overlay.width, overlay.height);
+    const op = overlayData.data;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (validLabels.has(labels[idx])) {
+          // 오버레이 좌표로 변환
+          const ox = Math.round(x * scaleX);
+          const oy = Math.round(y * scaleY);
+          if (ox < overlay.width && oy < overlay.height) {
+            const oi = (oy * overlay.width + ox) * 4;
+            op[oi] = 0;       // R
+            op[oi + 1] = 255; // G
+            op[oi + 2] = 0;   // B
+            op[oi + 3] = 255; // A
+          }
+        }
+      }
+    }
+
+    overlayCtx.putImageData(overlayData, 0, 0);
+  };
+
   // 저장: 원본 이미지 + 마스크 별도 생성
   const handleSave = () => {
     if (!overlayRef.current || !imgRef.current) return;
@@ -297,6 +391,15 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
           className="px-3 py-2 rounded-lg text-sm font-bold bg-gray-700 text-yellow-300 whitespace-nowrap"
         >
           전체 지우기
+        </button>
+
+        <div className="w-px h-6 bg-gray-600 mx-1" />
+
+        <button
+          onClick={handleAutoDetectWhite}
+          className="px-3 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white whitespace-nowrap"
+        >
+          흰색 자동감지
         </button>
       </div>
 
