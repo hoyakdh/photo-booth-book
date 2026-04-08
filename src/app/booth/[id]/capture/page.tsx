@@ -192,20 +192,24 @@ export default function CapturePage() {
         let w: number, h: number;
         if (cW / cH < aspect) { w = cW; h = cW / aspect; } else { h = cH; w = cH * aspect; }
 
-        if (canvas.width !== Math.round(w) || canvas.height !== Math.round(h) || !initialized) {
+        const sizeChanged = canvas.width !== Math.round(w) || canvas.height !== Math.round(h);
+
+        if (sizeChanged || !initialized) {
           canvas.width = Math.round(w);
           canvas.height = Math.round(h);
 
-          // 멀티컷 영역 감지 (최초 1회만)
-          if (!initialized) {
-            const bounds = calcMultiMaskBounds(maskImg, canvas.width, canvas.height);
-            allBoundsRef.current = bounds;
-            const cuts = Math.max(1, bounds.length);
-            setTotalCuts(cuts);
-            totalCutsRef.current = cuts;
+          // 멀티컷 영역 감지 (초기화 또는 리사이즈 시 재계산)
+          const bounds = calcMultiMaskBounds(maskImg, canvas.width, canvas.height);
+          allBoundsRef.current = bounds;
+          const cuts = Math.max(1, bounds.length);
+          setTotalCuts(cuts);
+          totalCutsRef.current = cuts;
 
-            // 합성 캔버스 초기화 (책표지로 시작)
+          // 합성 캔버스 초기화/리사이즈 (책표지로 시작)
+          if (!initialized) {
             compositeCanvasRef.current = document.createElement("canvas");
+          }
+          if (compositeCanvasRef.current) {
             compositeCanvasRef.current.width = canvas.width;
             compositeCanvasRef.current.height = canvas.height;
             const compInitCtx = compositeCanvasRef.current.getContext("2d")!;
@@ -429,7 +433,7 @@ export default function CapturePage() {
 
       {/* 멀티컷 진행 표시 */}
       {totalCuts > 1 && (
-        <div className="flex items-center justify-center gap-2 py-2 bg-black/80">
+        <div className="flex-shrink-0 flex items-center justify-center gap-2 py-2 bg-black/80">
           {Array.from({ length: totalCuts }, (_, i) => (
             <div
               key={i}
@@ -450,7 +454,7 @@ export default function CapturePage() {
 
       {/* 크로마키 합성 캔버스 */}
       <div
-        className="flex-1 flex items-center justify-center relative"
+        className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -535,7 +539,7 @@ export default function CapturePage() {
       </div>
 
       {/* 하단 컨트롤 */}
-      <div className="flex items-center justify-between px-6 py-4 bg-black/80">
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80">
         <button
           onClick={() => { stopCamera(); router.push(`/booth/${id}`); }}
           className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch"
