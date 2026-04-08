@@ -345,7 +345,7 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* 상단 도구 바 */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 overflow-x-auto flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-900 flex-shrink-0">
         <button
           onClick={() => setTool("brush")}
           className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${
