@@ -205,15 +205,22 @@ export default function CapturePage() {
           setTotalCuts(cuts);
           totalCutsRef.current = cuts;
 
-          // 합성 캔버스 초기화/리사이즈 (책표지로 시작)
+          // 합성 캔버스 초기화 (최초 1회만 — 이전 컷 사진 보존)
           if (!initialized) {
             compositeCanvasRef.current = document.createElement("canvas");
-          }
-          if (compositeCanvasRef.current) {
             compositeCanvasRef.current.width = canvas.width;
             compositeCanvasRef.current.height = canvas.height;
             const compInitCtx = compositeCanvasRef.current.getContext("2d")!;
             compInitCtx.drawImage(coverImg, 0, 0, canvas.width, canvas.height);
+          } else if (sizeChanged && compositeCanvasRef.current) {
+            // 리사이즈: 기존 합성 내용을 보존하며 크기만 조정
+            const oldComp = compositeCanvasRef.current;
+            const newComp = document.createElement("canvas");
+            newComp.width = canvas.width;
+            newComp.height = canvas.height;
+            const ctx = newComp.getContext("2d")!;
+            ctx.drawImage(oldComp, 0, 0, newComp.width, newComp.height);
+            compositeCanvasRef.current = newComp;
           }
 
           setupCurrentCut(currentCutRef.current);
