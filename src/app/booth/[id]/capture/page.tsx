@@ -145,19 +145,17 @@ export default function CapturePage() {
     }
   }, []);
 
-  // 가이드 좌표 업데이트
+  // 가이드 좌표 업데이트 (캔버스 내부 % 기준)
   const updateGuideBounds = useCallback(() => {
     if (!canvasRef.current || !currentBoundsRef.current) return;
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width / canvas.width;
-    const scaleY = rect.height / canvas.height;
     const b = currentBoundsRef.current;
+    // 캔버스 내부 좌표를 % 비율로 변환
     setGuideBounds({
-      left: `${rect.left + b.x * scaleX}px`,
-      top: `${rect.top + b.y * scaleY}px`,
-      width: `${b.w * scaleX}px`,
-      height: `${b.h * scaleY}px`,
+      left: `${(b.x / canvas.width) * 100}%`,
+      top: `${(b.y / canvas.height) * 100}%`,
+      width: `${(b.w / canvas.width) * 100}%`,
+      height: `${(b.h / canvas.height) * 100}%`,
     });
   }, []);
 
@@ -414,20 +412,21 @@ export default function CapturePage() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <canvas ref={canvasRef} className="max-w-full max-h-full" />
-
-        {/* 촬영 가이드 */}
-        {showGuide && guideBounds && countdown === null && (
-          <div
-            className="fixed z-10 pointer-events-none flex items-center justify-center"
-            style={{ left: guideBounds.left, top: guideBounds.top, width: guideBounds.width, height: guideBounds.height }}
-          >
-            <div className="absolute inset-0 border-[3px] border-dashed border-white/60 rounded-2xl animate-pulse" />
-            <p className="text-white/70 text-sm font-bold bg-black/30 px-3 py-1.5 rounded-full">
-              여기에 얼굴을 맞춰주세요
-            </p>
-          </div>
-        )}
+        <div className="relative max-w-full max-h-full">
+          <canvas ref={canvasRef} className="block max-w-full max-h-full" />
+          {/* 촬영 가이드 (캔버스 기준 % 좌표) */}
+          {showGuide && guideBounds && countdown === null && (
+            <div
+              className="absolute z-10 pointer-events-none flex items-center justify-center"
+              style={{ left: guideBounds.left, top: guideBounds.top, width: guideBounds.width, height: guideBounds.height }}
+            >
+              <div className="absolute inset-0 border-[3px] border-dashed border-white/60 rounded-2xl animate-pulse" />
+              <p className="text-white/70 text-sm font-bold bg-black/30 px-3 py-1.5 rounded-full">
+                여기에 얼굴을 맞춰주세요
+              </p>
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
