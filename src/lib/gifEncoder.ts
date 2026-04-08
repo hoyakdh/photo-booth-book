@@ -5,8 +5,8 @@
 // gif.js는 브라우저 전용이므로 dynamic import
 export async function createGif(
   frames: HTMLCanvasElement[],
-  fps: number = 8,
-  quality: number = 10
+  fps: number = 10,
+  quality: number = 5
 ): Promise<Blob> {
   const GifModule = await import("gif.js");
   const GIF = GifModule.default;
@@ -66,7 +66,7 @@ export class FrameBuffer {
     if (!ctx) return;
 
     // 리사이즈 (GIF 파일 크기 최적화)
-    const scale = Math.min(1, 320 / sourceCanvas.width);
+    const scale = Math.min(1, 480 / sourceCanvas.width);
     const w = Math.round(sourceCanvas.width * scale);
     const h = Math.round(sourceCanvas.height * scale);
 

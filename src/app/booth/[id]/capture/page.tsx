@@ -88,7 +88,7 @@ export default function CapturePage() {
   useEffect(() => {
     initAudio();
     wmConfigRef.current = loadWatermarkConfig();
-    frameBufferRef.current = new FrameBuffer(30, 320, 240);
+    frameBufferRef.current = new FrameBuffer(40, 480, 360);
   }, []);
 
   // 카메라 시작
