@@ -352,17 +352,10 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
         초록색으로 칠한 부분만 카메라로 보여요!
       </div>
 
-      {/* 로딩 */}
-      {!maskRestored && (
-        <div className="flex-1 flex items-center justify-center bg-gray-800">
-          <p className="text-white text-lg">불러오는 중...</p>
-        </div>
-      )}
-
       {/* 편집 영역 */}
       <div
         ref={containerRef}
-        className={`flex-1 relative overflow-hidden bg-gray-800 ${!maskRestored ? "hidden" : ""}`}
+        className="flex-1 relative overflow-hidden bg-gray-800"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -371,6 +364,13 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
       >
         <canvas ref={canvasRef} className="absolute" />
         <canvas ref={overlayRef} className="absolute" style={{ opacity: 0.7 }} />
+
+        {/* 로딩 오버레이 */}
+        {!maskRestored && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-800">
+            <p className="text-white text-lg">불러오는 중...</p>
+          </div>
+        )}
 
         {rectPreview && (
           <div
