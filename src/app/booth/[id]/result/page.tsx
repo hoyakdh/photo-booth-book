@@ -4,6 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useRef, useCallback } from "react";
 import { usePhotoStore } from "@/store/usePhotoStore";
 import { useBookCover } from "@/hooks/useBookCovers";
+import StickerEditor from "@/components/StickerEditor";
+import { createGif } from "@/lib/gifEncoder";
 
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +16,10 @@ export default function ResultPage() {
 
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [saved, setSaved] = useState(false);
-  const linkRef = useRef<HTMLAnchorElement>(null);
+  const [showSticker, setShowSticker] = useState(false);
+  const [gifCreating, setGifCreating] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
+  const gifFrames = usePhotoStore((s) => s.gifFrames);
 
   const selectedPhoto = photos[selectedIdx];
 
@@ -23,7 +28,6 @@ export default function ResultPage() {
 
     const dataUrl = selectedPhoto.imageData;
 
-    // iOS Safari: Web Share API 시도
     if (navigator.share && navigator.canShare) {
       try {
         const res = await fetch(dataUrl);
@@ -39,7 +43,6 @@ export default function ResultPage() {
       }
     }
 
-    // Fallback: a 태그 다운로드
     const a = document.createElement("a");
     a.href = dataUrl;
     a.download = `photo-booth-${Date.now()}.png`;
@@ -48,6 +51,62 @@ export default function ResultPage() {
     document.body.removeChild(a);
     setSaved(true);
   }, [selectedPhoto]);
+
+  const handlePrint = useCallback(() => {
+    if (!selectedPhoto) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Photo Booth Print</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: auto; margin: 5mm; }
+    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; }
+    img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <img src="${selectedPhoto.imageData}" onload="window.print(); window.close();" />
+</body>
+</html>`);
+    printWindow.document.close();
+  }, [selectedPhoto]);
+
+  const handleStickerSave = useCallback((editedImage: string) => {
+    if (!selectedPhoto) return;
+    // 스티커 적용된 이미지로 업데이트
+    const store = usePhotoStore.getState();
+    const updated = store.capturedPhotos.map((p, idx) =>
+      idx === selectedIdx ? { ...p, imageData: editedImage } : p
+    );
+    usePhotoStore.setState({ capturedPhotos: updated });
+    setShowSticker(false);
+    setSaved(false);
+  }, [selectedPhoto, selectedIdx]);
+
+  const handleGifSave = useCallback(async () => {
+    if (gifFrames.length === 0) return;
+    setGifCreating(true);
+    try {
+      const blob = await createGif(gifFrames, 8, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `photo-booth-${Date.now()}.gif`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("GIF 생성 실패:", err);
+    } finally {
+      setGifCreating(false);
+    }
+  }, [gifFrames]);
 
   const handleRetake = () => {
     router.push(`/booth/${id}/capture`);
@@ -74,7 +133,14 @@ export default function ResultPage() {
 
   return (
     <div className="h-screen-safe flex flex-col bg-gray-100">
-      <a ref={linkRef} className="hidden" />
+      {/* 스티커 에디터 */}
+      {showSticker && selectedPhoto && (
+        <StickerEditor
+          imageData={selectedPhoto.imageData}
+          onSave={handleStickerSave}
+          onCancel={() => setShowSticker(false)}
+        />
+      )}
 
       {/* 헤더 */}
       <header className="flex items-center justify-between px-4 py-3 bg-white shadow-sm">
@@ -96,7 +162,7 @@ export default function ResultPage() {
       </header>
 
       {/* 선택된 사진 크게 보기 */}
-      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+      <div ref={printRef} className="flex-1 flex items-center justify-center p-4 overflow-hidden">
         {selectedPhoto && (
           <img
             src={selectedPhoto.imageData}
@@ -131,26 +197,45 @@ export default function ResultPage() {
       )}
 
       {/* 하단 버튼 */}
-      <div className="flex gap-3 px-4 py-4 bg-white">
+      <div className="flex gap-2 px-4 py-4 bg-white">
         <button
           onClick={handleDownload}
-          className={`flex-1 py-4 rounded-2xl font-bold text-lg btn-touch transition-colors ${
-            saved
-              ? "bg-success text-white"
-              : "bg-primary text-white"
+          className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors ${
+            saved ? "bg-success text-white" : "bg-primary text-white"
           }`}
         >
-          {saved ? "저장 완료!" : "사진 저장하기"}
+          {saved ? "저장 완료!" : "저장"}
+        </button>
+        <button
+          onClick={() => setShowSticker(true)}
+          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch"
+        >
+          꾸미기
+        </button>
+        {gifFrames.length > 0 && (
+          <button
+            onClick={handleGifSave}
+            disabled={gifCreating}
+            className="py-3 px-3 bg-purple-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50"
+          >
+            {gifCreating ? "생성중..." : "GIF"}
+          </button>
+        )}
+        <button
+          onClick={handlePrint}
+          className="py-3 px-3 bg-blue-500 text-white rounded-2xl font-bold text-sm btn-touch"
+        >
+          인쇄
         </button>
         <button
           onClick={handleRetake}
-          className="px-6 py-4 bg-secondary text-white rounded-2xl font-bold text-lg btn-touch"
+          className="py-3 px-3 bg-secondary text-white rounded-2xl font-bold text-sm btn-touch"
         >
-          다시 촬영
+          다시촬영
         </button>
         <button
           onClick={handleHome}
-          className="px-6 py-4 bg-gray-300 text-gray-700 rounded-2xl font-bold text-lg btn-touch"
+          className="py-3 px-3 bg-gray-300 text-gray-700 rounded-2xl font-bold text-sm btn-touch"
         >
           홈
         </button>

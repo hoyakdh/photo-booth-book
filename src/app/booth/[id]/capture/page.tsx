@@ -8,6 +8,8 @@ import { usePhotoStore } from "@/store/usePhotoStore";
 import { compositeMask, calcMaskBounds, createFeatheredMask, CameraTransform, MaskBounds } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
+import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
+import { FrameBuffer } from "@/lib/gifEncoder";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -26,11 +28,16 @@ export default function CapturePage() {
   const maskImageRef = useRef<HTMLImageElement | null>(null);
   const maskBoundsRef = useRef<MaskBounds | null>(null);
   const featheredMaskRef = useRef<ImageData | null>(null);
+  const wmConfigRef = useRef<WatermarkConfig | null>(null);
+  const frameBufferRef = useRef<FrameBuffer | null>(null);
+  const frameCountRef = useRef(0);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
   const [cameraStarted, setCameraStarted] = useState(false);
   const [maskLoaded, setMaskLoaded] = useState(false);
+  const [showGuide, setShowGuide] = useState(true);
+  const [guideBounds, setGuideBounds] = useState<{ left: string; top: string; width: string; height: string } | null>(null);
 
   // 줌 & 이동 상태
   const [zoom, setZoom] = useState(1);
@@ -71,9 +78,11 @@ export default function CapturePage() {
     lastPinchDistRef.current = null;
   }, []);
 
-  // iOS Audio 활성화 (마운트 시)
+  // 초기화 (마운트 시)
   useEffect(() => {
     initAudio();
+    wmConfigRef.current = loadWatermarkConfig();
+    frameBufferRef.current = new FrameBuffer(30, 320, 240); // 약 3초분 (10fps)
   }, []);
 
   // 카메라 시작
@@ -157,6 +166,18 @@ export default function CapturePage() {
           // 캔버스 크기 변경 시 바운딩박스 + 페더링 마스크 재계산
           maskBoundsRef.current = calcMaskBounds(maskImg, canvas.width, canvas.height);
           featheredMaskRef.current = createFeatheredMask(maskImg, canvas.width, canvas.height);
+
+          // 가이드 오버레이 좌표 업데이트 (캔버스→CSS 변환)
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = rect.width / canvas.width;
+          const scaleY = rect.height / canvas.height;
+          const b = maskBoundsRef.current;
+          setGuideBounds({
+            left: `${rect.left + b.x * scaleX}px`,
+            top: `${rect.top + b.y * scaleY}px`,
+            width: `${b.w * scaleX}px`,
+            height: `${b.h * scaleY}px`,
+          });
         }
 
         if (!maskBoundsRef.current) {
@@ -172,6 +193,12 @@ export default function CapturePage() {
           maskBoundsRef.current,
           featheredMaskRef.current
         );
+
+        // GIF용 프레임 캡처 (매 3프레임마다 ≈ 10fps)
+        frameCountRef.current++;
+        if (frameCountRef.current % 3 === 0 && frameBufferRef.current) {
+          frameBufferRef.current.capture(canvas);
+        }
       }
       animFrameRef.current = requestAnimationFrame(render);
     };
@@ -187,6 +214,7 @@ export default function CapturePage() {
   const handleCapture = useCallback(() => {
     if (countdown !== null) return;
 
+    setShowGuide(false);
     let count = 3;
     setCountdown(count);
     playBeep();
@@ -209,6 +237,11 @@ export default function CapturePage() {
         setTimeout(() => setFlash(false), 400);
 
         if (canvasRef.current) {
+          // 워터마크 적용
+          if (wmConfigRef.current?.enabled) {
+            const ctx = canvasRef.current.getContext("2d")!;
+            drawWatermark(ctx, canvasRef.current.width, canvasRef.current.height, wmConfigRef.current);
+          }
           const imageData = canvasRef.current.toDataURL("image/png");
           addPhoto({
             id: generateId(),
@@ -217,12 +250,18 @@ export default function CapturePage() {
             capturedAt: Date.now(),
           });
         }
+        setShowGuide(true);
       }
     }, 1000);
   }, [countdown, id, addPhoto]);
 
   // 결과 보기
+  const setGifFrames = usePhotoStore((s) => s.setGifFrames);
   const handleViewResults = () => {
+    // GIF용 프레임 저장
+    if (frameBufferRef.current && frameBufferRef.current.length > 0) {
+      setGifFrames(frameBufferRef.current.getFramesAsCanvases());
+    }
     stopCamera();
     router.push(`/booth/${id}/result`);
   };
@@ -268,6 +307,24 @@ export default function CapturePage() {
         onTouchEnd={handleTouchEnd}
       >
         <canvas ref={canvasRef} className="max-w-full max-h-full" />
+
+        {/* 촬영 가이드 오버레이 */}
+        {showGuide && guideBounds && countdown === null && (
+          <div
+            className="fixed z-10 pointer-events-none flex items-center justify-center"
+            style={{
+              left: guideBounds.left,
+              top: guideBounds.top,
+              width: guideBounds.width,
+              height: guideBounds.height,
+            }}
+          >
+            <div className="absolute inset-0 border-[3px] border-dashed border-white/60 rounded-2xl animate-pulse" />
+            <p className="text-white/70 text-sm font-bold bg-black/30 px-3 py-1.5 rounded-full">
+              여기에 얼굴을 맞춰주세요
+            </p>
+          </div>
+        )}
 
         {/* 카메라 에러 */}
         {error && (

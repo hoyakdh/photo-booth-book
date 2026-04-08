@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
 import { generateId, fileToDataURL, resizeImage } from "@/lib/utils";
 import { BookCover } from "@/types";
 import ChromaKeyEditor from "@/components/ChromaKeyEditor";
+import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib/watermark";
+import { exportBookCovers, importBookCovers } from "@/lib/backup";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -16,6 +18,34 @@ export default function AdminPage() {
   const [chromaPreview, setChromaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showChromaEditor, setShowChromaEditor] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  // 내보내기/가져오기
+  const handleExport = async () => {
+    await exportBookCovers();
+  };
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = await importBookCovers(file);
+      alert(`${count}개의 책표지를 가져왔습니다`);
+      window.location.reload();
+    } catch {
+      alert("파일을 읽을 수 없습니다. 올바른 백업 파일인지 확인해주세요.");
+    }
+    if (importInputRef.current) importInputRef.current.value = "";
+  };
+
+  // 워터마크 설정
+  const [wm, setWm] = useState<WatermarkConfig | null>(null);
+  useEffect(() => { setWm(loadWatermarkConfig()); }, []);
+  const updateWm = (partial: Partial<WatermarkConfig>) => {
+    if (!wm) return;
+    const updated = { ...wm, ...partial };
+    setWm(updated);
+    saveWatermarkConfig(updated);
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,6 +138,28 @@ export default function AdminPage() {
       <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-6 text-sm text-amber-800">
         <p className="font-bold mb-1">안내사항</p>
         <p>등록한 책표지는 이 브라우저의 로컬 저장소에 저장됩니다. 브라우저 데이터 삭제, 시크릿 모드 사용, 다른 기기/브라우저에서 접속 시 등록한 책표지가 사라질 수 있습니다.</p>
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={handleExport}
+            disabled={covers.length === 0}
+            className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-40"
+          >
+            백업 내보내기
+          </button>
+          <button
+            onClick={() => importInputRef.current?.click()}
+            className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-bold btn-touch"
+          >
+            백업 가져오기
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImport}
+            className="hidden"
+          />
+        </div>
       </div>
 
       {/* 등록/수정 폼 */}
@@ -226,6 +278,99 @@ export default function AdminPage() {
           ))
         )}
       </div>
+      {/* 워터마크 설정 */}
+      {wm && (
+        <div className="bg-white rounded-2xl shadow-lg p-5 mt-6 border border-blue-100">
+          <h2 className="text-lg font-bold mb-4 text-blue-600">워터마크 설정</h2>
+          <div className="space-y-4">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={wm.enabled}
+                onChange={(e) => updateWm({ enabled: e.target.checked })}
+                className="w-5 h-5 rounded"
+              />
+              <span className="font-medium">워터마크 사용</span>
+            </label>
+
+            {wm.enabled && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">텍스트 (예: 학교명)</label>
+                  <input
+                    type="text"
+                    value={wm.text}
+                    onChange={(e) => updateWm({ text: e.target.value })}
+                    placeholder="예: ○○초등학교 도서관"
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-400 focus:outline-none"
+                  />
+                </div>
+
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={wm.showDate}
+                    onChange={(e) => updateWm({ showDate: e.target.checked })}
+                    className="w-5 h-5 rounded"
+                  />
+                  <span className="text-sm">촬영 날짜 표시</span>
+                </label>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">위치</label>
+                  <select
+                    value={wm.position}
+                    onChange={(e) => updateWm({ position: e.target.value as WatermarkConfig["position"] })}
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl"
+                  >
+                    <option value="bottom-right">우측 하단</option>
+                    <option value="bottom-left">좌측 하단</option>
+                    <option value="top-right">우측 상단</option>
+                    <option value="top-left">좌측 상단</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium mb-1">글자 크기</label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={32}
+                      value={wm.fontSize}
+                      onChange={(e) => updateWm({ fontSize: Number(e.target.value) })}
+                      className="w-full"
+                    />
+                    <span className="text-xs text-gray-400">{wm.fontSize}px</span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">색상</label>
+                    <input
+                      type="color"
+                      value={wm.color}
+                      onChange={(e) => updateWm({ color: e.target.value })}
+                      className="w-10 h-10 rounded border-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">투명도</label>
+                  <input
+                    type="range"
+                    min={20}
+                    max={100}
+                    value={wm.opacity * 100}
+                    onChange={(e) => updateWm({ opacity: Number(e.target.value) / 100 })}
+                    className="w-full"
+                  />
+                  <span className="text-xs text-gray-400">{Math.round(wm.opacity * 100)}%</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
