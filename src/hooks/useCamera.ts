@@ -20,17 +20,22 @@ interface UseCameraReturn {
 export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
   const { facingMode = "user", width = 1280, height = 960 } = options;
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStream(null);
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsReady(false);
-  }, [stream]);
+  }, []);
 
   const startCamera = useCallback(async () => {
     setError(null);
@@ -50,6 +55,7 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
         audio: false,
       });
 
+      streamRef.current = mediaStream;
       setStream(mediaStream);
 
       if (videoRef.current) {
@@ -81,12 +87,14 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
     }
   }, [facingMode, width, height]);
 
-  // cleanup on unmount
+  // cleanup on unmount - ref 기반으로 항상 최신 stream 참조
   useEffect(() => {
     return () => {
-      stream?.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { videoRef, stream, isReady, error, startCamera, stopCamera };
