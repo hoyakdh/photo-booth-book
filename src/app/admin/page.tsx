@@ -13,6 +13,7 @@ export default function AdminPage() {
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [maskData, setMaskData] = useState<string | null>(null);
+  const [chromaPreview, setChromaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showChromaEditor, setShowChromaEditor] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -24,7 +25,8 @@ export default function AdminPage() {
     const dataURL = await fileToDataURL(file);
     const resized = await resizeImage(dataURL);
     setPreview(resized);
-    setMaskData(null); // 새 이미지 → 마스크 초기화
+    setMaskData(null);
+    setChromaPreview(null);
   };
 
   const handleOpenChromaEditor = () => {
@@ -32,9 +34,10 @@ export default function AdminPage() {
     setShowChromaEditor(true);
   };
 
-  const handleChromaSave = (originalImage: string, mask: string) => {
+  const handleChromaSave = (originalImage: string, mask: string, previewImg: string) => {
     setPreview(originalImage);
     setMaskData(mask);
+    setChromaPreview(previewImg);
     setShowChromaEditor(false);
   };
 
@@ -52,6 +55,7 @@ export default function AdminPage() {
         name: name.trim(),
         imageData: preview,
         maskData: maskData || undefined,
+        previewData: chromaPreview || undefined,
         createdAt: Date.now(),
       };
       await addCover(cover);
@@ -71,6 +75,7 @@ export default function AdminPage() {
     setName("");
     setPreview(null);
     setMaskData(null);
+    setChromaPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -134,7 +139,7 @@ export default function AdminPage() {
             <>
               <div className="relative">
                 <img
-                  src={preview}
+                  src={chromaPreview || preview}
                   alt="미리보기"
                   className="w-full max-h-80 object-contain rounded-xl border-2 border-dashed border-gray-300"
                 />
@@ -190,7 +195,7 @@ export default function AdminPage() {
               className="flex items-center gap-4 bg-white rounded-2xl shadow p-3 border border-gray-100"
             >
               <img
-                src={cover.imageData}
+                src={cover.previewData || cover.imageData}
                 alt={cover.name}
                 className="w-20 h-28 object-cover rounded-lg"
               />

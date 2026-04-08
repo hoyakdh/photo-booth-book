@@ -5,7 +5,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 interface ChromaKeyEditorProps {
   imageData: string;
   existingMask?: string | null;
-  onSave: (editedImageData: string, maskData: string) => void;
+  onSave: (originalImage: string, maskData: string, previewImage: string) => void;
   onCancel: () => void;
 }
 
@@ -233,7 +233,19 @@ export default function ChromaKeyEditor({ imageData, existingMask, onSave, onCan
     maskCtx.putImageData(maskImageData, 0, 0);
 
     const maskDataURL = maskCanvas.toDataURL("image/png");
-    onSave(imageData, maskDataURL);
+
+    // 미리보기 생성: 원본 + 반투명 초록 오버레이
+    const previewCanvas = document.createElement("canvas");
+    previewCanvas.width = img.naturalWidth;
+    previewCanvas.height = img.naturalHeight;
+    const previewCtx = previewCanvas.getContext("2d")!;
+    previewCtx.drawImage(img, 0, 0);
+    previewCtx.globalAlpha = 0.5;
+    previewCtx.drawImage(overlay, 0, 0);
+    previewCtx.globalAlpha = 1;
+    const previewDataURL = previewCanvas.toDataURL("image/png");
+
+    onSave(imageData, maskDataURL, previewDataURL);
   };
 
   return (
