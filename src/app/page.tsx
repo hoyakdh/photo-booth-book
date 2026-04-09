@@ -161,7 +161,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 h-full md:grid-rows-2"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
@@ -186,7 +186,7 @@ export default function HomePage() {
                     : "border-transparent hover:border-primary active:scale-95"
                 }`}
               >
-                <div className="aspect-[3/4] md:aspect-auto md:flex-1 md:min-h-0 overflow-hidden bg-gray-50 flex items-center justify-center">
+                <div className="aspect-[3/4] md:max-h-[35dvh] overflow-hidden bg-gray-50 flex items-center justify-center">
                   <img
                     src={cover.previewData || cover.imageData}
                     alt={cover.name}
