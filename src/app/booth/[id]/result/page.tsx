@@ -27,11 +27,11 @@ export default function ResultPage() {
     if (!selectedPhoto) return;
 
     const dataUrl = selectedPhoto.imageData;
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
 
     if (navigator.share && navigator.canShare) {
       try {
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
         const file = new File([blob], `photo-booth-${Date.now()}.png`, { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file] });
@@ -39,16 +39,19 @@ export default function ResultPage() {
           return;
         }
       } catch {
-        // fallback
+        // 사용자가 공유 시트를 취소한 경우 — fallback으로 진행
       }
     }
 
+    // blob URL 사용 (data URL은 iOS Safari에서 download 속성이 작동하지 않음)
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = dataUrl;
+    a.href = url;
     a.download = `photo-booth-${Date.now()}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     setSaved(true);
   }, [selectedPhoto]);
 
@@ -93,6 +96,19 @@ export default function ResultPage() {
     setGifCreating(true);
     try {
       const blob = await createGif(gifFrames, 8, 10);
+
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([blob], `photo-booth-${Date.now()}.gif`, { type: "image/gif" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file] });
+            return;
+          }
+        } catch {
+          // 사용자가 공유 시트를 취소한 경우 — fallback으로 진행
+        }
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
