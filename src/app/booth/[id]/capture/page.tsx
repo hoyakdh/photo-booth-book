@@ -543,8 +543,36 @@ export default function CapturePage() {
           {showZoomUI && (
             <div className="flex flex-col items-center gap-1 bg-black/60 backdrop-blur rounded-2xl p-2">
               <button onClick={() => setZoom((v) => Math.min(MAX_ZOOM, +(v + ZOOM_STEP).toFixed(1)))} className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-2xl font-bold btn-touch">+</button>
-              <div className="relative h-40 w-10 flex items-center justify-center">
-                <input type="range" min={MIN_ZOOM * 10} max={MAX_ZOOM * 10} value={zoom * 10} onChange={(e) => setZoom(Number(e.target.value) / 10)} className="absolute w-40 origin-center -rotate-90" style={{ appearance: "auto" }} />
+              <div
+                className="relative h-40 w-10 flex items-center justify-center select-none"
+                style={{ touchAction: "none" }}
+                onPointerDown={(e) => {
+                  const el = e.currentTarget;
+                  el.setPointerCapture(e.pointerId);
+                  const update = (clientY: number) => {
+                    const rect = el.getBoundingClientRect();
+                    const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+                    setZoom(+(MIN_ZOOM + ratio * (MAX_ZOOM - MIN_ZOOM)).toFixed(1));
+                  };
+                  update(e.clientY);
+                }}
+                onPointerMove={(e) => {
+                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = 1 - Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                  setZoom(+(MIN_ZOOM + ratio * (MAX_ZOOM - MIN_ZOOM)).toFixed(1));
+                }}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+              >
+                <div className="absolute inset-y-2 left-1/2 -translate-x-1/2 w-1.5 bg-white/30 rounded-full" />
+                <div
+                  className="absolute left-1/2 w-5 h-5 bg-white rounded-full shadow pointer-events-none"
+                  style={{
+                    bottom: `calc(0.5rem + ${(zoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)} * (100% - 1rem))`,
+                    transform: "translate(-50%, 50%)",
+                  }}
+                />
               </div>
               <button onClick={() => setZoom((v) => Math.max(MIN_ZOOM, +(v - ZOOM_STEP).toFixed(1)))} className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-2xl font-bold btn-touch">-</button>
               <button onClick={() => { setZoom(1); setOffsetX(0); setOffsetY(0); }} className="w-10 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white text-xs font-bold btn-touch mt-1">리셋</button>
