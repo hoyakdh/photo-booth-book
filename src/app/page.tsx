@@ -161,7 +161,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
+            className="flex flex-wrap justify-center gap-3"
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
@@ -178,7 +178,7 @@ export default function HomePage() {
                 onClick={() => {
                   if (!isDragging.current) router.push(`/booth/${cover.id}`);
                 }}
-                className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 flex flex-col ${
+                className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 flex flex-col w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(25%-0.5625rem)] ${
                   dragIdx === idx
                     ? "opacity-50 border-primary scale-95"
                     : overIdx === idx && dragIdx !== null
