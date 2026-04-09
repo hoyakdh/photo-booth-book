@@ -186,7 +186,7 @@ export default function HomePage() {
                     : "border-transparent hover:border-primary active:scale-95"
                 }`}
               >
-                <div className="aspect-[3/4] md:max-h-[35dvh] overflow-hidden bg-gray-50 flex items-center justify-center">
+                <div className="aspect-[3/4] md:aspect-auto md:h-[35dvh] w-full overflow-hidden bg-gray-50 flex items-center justify-center">
                   <img
                     src={cover.previewData || cover.imageData}
                     alt={cover.name}
