@@ -144,7 +144,7 @@ export default function HomePage() {
       </header>
 
       {/* 책표지 그리드 */}
-      <main className="flex-1 min-h-0 px-4 pb-3">
+      <main className="flex-1 min-h-0 px-4 pb-3 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-60">
             <div className="text-xl text-gray-400">불러오는 중...</div>
