@@ -536,7 +536,7 @@ export default function CapturePage() {
         {flash && <div className="absolute inset-0 bg-white z-30 animate-flash" />}
 
         {/* 줌 컨트롤 */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+        <div className="absolute right-3 bottom-3 flex flex-col items-center gap-2 z-10">
           <button onClick={() => setShowZoomUI((v) => !v)} className="w-10 h-10 bg-black/50 backdrop-blur rounded-full flex items-center justify-center text-white text-lg font-bold btn-touch">
             {zoom > 1 ? `${zoom.toFixed(1)}x` : "ZM"}
           </button>
@@ -553,7 +553,7 @@ export default function CapturePage() {
         </div>
 
         {zoom > 1 && showZoomUI && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+          <div className="absolute left-3 bottom-3 z-10">
             <div className="bg-black/60 backdrop-blur rounded-2xl p-2 flex flex-col items-center gap-1">
               <p className="text-white text-[10px] mb-1">위치</p>
               <button onClick={() => setOffsetY((v) => Math.max(-1, +(v - 0.1).toFixed(1)))} className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white text-lg btn-touch">▲</button>
