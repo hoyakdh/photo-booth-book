@@ -28,7 +28,7 @@ export async function getAllBookCovers(): Promise<BookCover[]> {
     const request = store.getAll();
     request.onsuccess = () => {
       const covers = request.result as BookCover[];
-      covers.sort((a, b) => b.createdAt - a.createdAt);
+      covers.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || b.createdAt - a.createdAt);
       resolve(covers);
     };
     request.onerror = () => reject(request.error);

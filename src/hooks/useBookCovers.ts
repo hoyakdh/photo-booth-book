@@ -38,7 +38,13 @@ export function useBookCovers() {
     await loadCovers();
   };
 
-  return { covers, loading, addCover, removeCover, updateCover };
+  const reorderCovers = async (reordered: BookCover[]) => {
+    const updated = reordered.map((c, i) => ({ ...c, order: i }));
+    setCovers(updated);
+    await Promise.all(updated.map((c) => saveBookCover(c)));
+  };
+
+  return { covers, loading, addCover, removeCover, updateCover, reorderCovers };
 }
 
 export function useBookCover(id: string) {
