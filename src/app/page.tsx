@@ -2,12 +2,34 @@
 
 import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { BookCover } from "@/types";
+import { loadKioskConfig } from "@/lib/kiosk";
 
 export default function HomePage() {
   const router = useRouter();
   const { covers, loading, reorderCovers } = useBookCovers();
+
+  const [kioskMode, setKioskMode] = useState(false);
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setKioskMode(loadKioskConfig().enabled);
+  }, []);
+
+  const handleLogoTap = () => {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      router.push("/admin");
+      return;
+    }
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 1500);
+  };
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -110,7 +132,10 @@ export default function HomePage() {
     <div className="min-h-[100dvh] flex flex-col">
       {/* 헤더 */}
       <header className="text-center py-6 px-4">
-        <h1 className="text-3xl sm:text-4xl font-black text-primary">
+        <h1
+          className="text-3xl sm:text-4xl font-black text-primary select-none"
+          onClick={handleLogoTap}
+        >
           Book Photo Booth
         </h1>
         <p className="text-base sm:text-lg text-gray-500 mt-1">
@@ -180,14 +205,16 @@ export default function HomePage() {
       </main>
 
       {/* 하단 */}
-      <footer className="p-4 text-center">
-        <button
-          onClick={() => router.push("/admin")}
-          className="text-sm text-gray-400 underline"
-        >
-          관리자 페이지
-        </button>
-      </footer>
+      {!kioskMode && (
+        <footer className="p-4 text-center">
+          <button
+            onClick={() => router.push("/admin")}
+            className="text-sm text-gray-400 underline"
+          >
+            관리자 페이지
+          </button>
+        </footer>
+      )}
     </div>
   );
 }

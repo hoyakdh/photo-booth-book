@@ -8,6 +8,7 @@ import { BookCover } from "@/types";
 import ChromaKeyEditor from "@/components/ChromaKeyEditor";
 import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib/watermark";
 import { exportBookCovers, importBookCovers } from "@/lib/backup";
+import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -35,6 +36,16 @@ export default function AdminPage() {
       alert("파일을 읽을 수 없습니다. 올바른 백업 파일인지 확인해주세요.");
     }
     if (importInputRef.current) importInputRef.current.value = "";
+  };
+
+  // 키오스크 설정
+  const [kiosk, setKiosk] = useState<KioskConfig | null>(null);
+  useEffect(() => { setKiosk(loadKioskConfig()); }, []);
+  const updateKiosk = (partial: Partial<KioskConfig>) => {
+    if (!kiosk) return;
+    const updated = { ...kiosk, ...partial };
+    setKiosk(updated);
+    saveKioskConfig(updated);
   };
 
   // 워터마크 설정
@@ -366,6 +377,136 @@ export default function AdminPage() {
                   />
                   <span className="text-xs text-gray-400">{Math.round(wm.opacity * 100)}%</span>
                 </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {/* 키오스크 설정 */}
+      {kiosk && (
+        <div className="bg-white rounded-2xl shadow-lg p-5 mt-6 border border-purple-100">
+          <h2 className="text-lg font-bold mb-4 text-purple-600">키오스크 모드</h2>
+          <div className="space-y-4">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={kiosk.enabled}
+                onChange={(e) => updateKiosk({ enabled: e.target.checked })}
+                className="w-5 h-5 rounded accent-purple-600"
+              />
+              <span className="font-medium">키오스크 모드 사용</span>
+            </label>
+
+            {kiosk.enabled && (
+              <>
+                {/* 전체 화면 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.fullscreen}
+                    onChange={(e) => updateKiosk({ fullscreen: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">전체 화면 고정</span>
+                    <p className="text-xs text-gray-400">첫 터치 시 전체화면으로 전환</p>
+                  </div>
+                </label>
+
+                {/* 자동 리셋 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.autoReset}
+                    onChange={(e) => updateKiosk({ autoReset: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">무조작 시 자동 리셋</span>
+                    <p className="text-xs text-gray-400">일정 시간 조작 없으면 메인화면으로 복귀</p>
+                  </div>
+                </label>
+                {kiosk.autoReset && (
+                  <div className="ml-8">
+                    <label className="block text-sm font-medium mb-1">대기 시간</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={15}
+                        max={180}
+                        step={5}
+                        value={kiosk.autoResetSeconds}
+                        onChange={(e) => updateKiosk({ autoResetSeconds: Number(e.target.value) })}
+                        className="flex-1 accent-purple-600"
+                      />
+                      <span className="text-sm font-bold w-12 text-right">{kiosk.autoResetSeconds}초</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 결과 화면 자동 복귀 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.resultAutoReturn}
+                    onChange={(e) => updateKiosk({ resultAutoReturn: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">결과 화면 자동 복귀</span>
+                    <p className="text-xs text-gray-400">저장 후 자동으로 메인화면으로 돌아감</p>
+                  </div>
+                </label>
+                {kiosk.resultAutoReturn && (
+                  <div className="ml-8">
+                    <label className="block text-sm font-medium mb-1">복귀 시간</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={5}
+                        max={60}
+                        step={5}
+                        value={kiosk.resultReturnSeconds}
+                        onChange={(e) => updateKiosk({ resultReturnSeconds: Number(e.target.value) })}
+                        className="flex-1 accent-purple-600"
+                      />
+                      <span className="text-sm font-bold w-12 text-right">{kiosk.resultReturnSeconds}초</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 뒤로가기 방지 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.preventNavigation}
+                    onChange={(e) => updateKiosk({ preventNavigation: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">뒤로가기/새로고침 방지</span>
+                    <p className="text-xs text-gray-400">실수로 앱을 벗어나는 것을 방지</p>
+                  </div>
+                </label>
+
+                {/* 화면 꺼짐 방지 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.wakeLock}
+                    onChange={(e) => updateKiosk({ wakeLock: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">화면 꺼짐 방지</span>
+                    <p className="text-xs text-gray-400">iPad/기기 화면이 자동으로 꺼지지 않음</p>
+                  </div>
+                </label>
+
+                <p className="text-xs text-gray-400 bg-purple-50 rounded-lg p-3">
+                  키오스크 모드 활성화 시 메인화면에서 관리자 링크가 숨겨집니다.
+                  관리자 페이지 접근: 로고를 5번 연속 탭하세요.
+                </p>
               </>
             )}
           </div>
