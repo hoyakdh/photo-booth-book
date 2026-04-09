@@ -30,23 +30,26 @@ export default function HomePage() {
     }, 1500);
   };
 
+  const [reorderMode, setReorderMode] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const handleCardTap = (idx: number) => {
     if (selectedIdx === null) {
-      // 첫 번째 탭: 이동할 카드 선택
       setSelectedIdx(idx);
     } else if (selectedIdx === idx) {
-      // 같은 카드 다시 탭: 선택 해제
       setSelectedIdx(null);
     } else {
-      // 두 번째 탭: 선택한 카드를 이 위치로 이동
       const arr = [...covers];
       const [moved] = arr.splice(selectedIdx, 1);
       arr.splice(idx, 0, moved);
       reorderCovers(arr);
       setSelectedIdx(null);
     }
+  };
+
+  const exitReorderMode = () => {
+    setReorderMode(false);
+    setSelectedIdx(null);
   };
 
   return (
@@ -81,25 +84,38 @@ export default function HomePage() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3 select-none">
+          <>
+            {reorderMode && (
+              <div className="flex items-center justify-between mb-3 px-1">
+                <p className="text-sm text-primary font-bold">
+                  {selectedIdx === null ? "이동할 책을 선택하세요" : "이동할 위치를 선택하세요"}
+                </p>
+                <button
+                  onClick={exitReorderMode}
+                  className="px-4 py-2 rounded-xl text-sm font-bold bg-gray-200 text-gray-700"
+                >
+                  완료
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3 select-none">
             {covers.map((cover, idx) => (
               <button
                 key={cover.id}
                 onClick={() => {
-                  if (selectedIdx !== null) {
+                  if (reorderMode) {
                     handleCardTap(idx);
                   } else {
                     router.push(`/booth/${cover.id}`);
                   }
                 }}
-                onDoubleClick={() => {
-                  handleCardTap(idx);
-                }}
                 className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 flex flex-col w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(25%-0.5625rem)] ${
-                  selectedIdx === idx
+                  reorderMode && selectedIdx === idx
                     ? "border-primary scale-95 ring-4 ring-primary/30"
-                    : selectedIdx !== null
+                    : reorderMode && selectedIdx !== null
                     ? "border-dashed border-gray-300 opacity-80 hover:border-primary hover:opacity-100"
+                    : reorderMode
+                    ? "border-gray-200"
                     : "border-transparent hover:border-primary active:scale-95"
                 }`}
               >
@@ -118,12 +134,19 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+          </>
         )}
       </main>
 
       {/* 하단 */}
       {!kioskMode && (
-        <footer className="p-4 text-center">
+        <footer className="p-4 text-center flex items-center justify-center gap-4">
+          <button
+            onClick={() => setReorderMode(!reorderMode)}
+            className={`text-sm underline ${reorderMode ? "text-primary font-bold" : "text-gray-400"}`}
+          >
+            순서 변경
+          </button>
           <button
             onClick={() => router.push("/admin")}
             className="text-sm text-gray-400 underline"
