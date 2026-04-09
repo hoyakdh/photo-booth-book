@@ -161,7 +161,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            className="flex flex-wrap justify-center gap-3"
+            className="flex flex-wrap justify-center gap-3 select-none"
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
