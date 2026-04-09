@@ -129,9 +129,9 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col">
+    <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* 헤더 */}
-      <header className="text-center py-6 px-4">
+      <header className="text-center py-4 md:py-3 px-4 shrink-0">
         <h1
           className="text-3xl sm:text-4xl font-black text-primary select-none"
           onClick={handleLogoTap}
@@ -144,7 +144,7 @@ export default function HomePage() {
       </header>
 
       {/* 책표지 그리드 */}
-      <main className="flex-1 px-4 pb-6">
+      <main className="flex-1 min-h-0 px-4 pb-3">
         {loading ? (
           <div className="flex items-center justify-center h-60">
             <div className="text-xl text-gray-400">불러오는 중...</div>
@@ -161,7 +161,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 h-full md:grid-rows-2"
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
@@ -178,7 +178,7 @@ export default function HomePage() {
                 onClick={() => {
                   if (!isDragging.current) router.push(`/booth/${cover.id}`);
                 }}
-                className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 ${
+                className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 flex flex-col ${
                   dragIdx === idx
                     ? "opacity-50 border-primary scale-95"
                     : overIdx === idx && dragIdx !== null
@@ -186,14 +186,14 @@ export default function HomePage() {
                     : "border-transparent hover:border-primary active:scale-95"
                 }`}
               >
-                <div className="aspect-[3/4] overflow-hidden bg-gray-50 flex items-center justify-center">
+                <div className="aspect-[3/4] md:aspect-auto md:flex-1 md:min-h-0 overflow-hidden bg-gray-50 flex items-center justify-center">
                   <img
                     src={cover.previewData || cover.imageData}
                     alt={cover.name}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 pointer-events-none"
                   />
                 </div>
-                <div className="p-2 text-center">
+                <div className="p-2 text-center shrink-0">
                   <p className="font-bold text-sm sm:text-base truncate">
                     {cover.name}
                   </p>
