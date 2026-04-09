@@ -55,30 +55,6 @@ export default function ResultPage() {
     setSaved(true);
   }, [selectedPhoto]);
 
-  const handlePrint = useCallback(() => {
-    if (!selectedPhoto) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <title>Photo Booth Print</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    @page { size: auto; margin: 5mm; }
-    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; }
-    img { max-width: 100%; max-height: 100vh; object-fit: contain; }
-  </style>
-</head>
-<body>
-  <img src="${selectedPhoto.imageData}" onload="window.print(); window.close();" />
-</body>
-</html>`);
-    printWindow.document.close();
-  }, [selectedPhoto]);
-
   const handleStickerSave = useCallback((editedImage: string) => {
     if (!selectedPhoto) return;
     // 스티커 적용된 이미지로 업데이트
@@ -237,12 +213,6 @@ export default function ResultPage() {
             {gifCreating ? "생성중..." : "GIF"}
           </button>
         )}
-        <button
-          onClick={handlePrint}
-          className="py-3 px-3 bg-blue-500 text-white rounded-2xl font-bold text-sm btn-touch"
-        >
-          인쇄
-        </button>
         <button
           onClick={handleRetake}
           className="py-3 px-3 bg-secondary text-white rounded-2xl font-bold text-sm btn-touch"
