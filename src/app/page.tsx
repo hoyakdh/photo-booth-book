@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
-import { useRef, useState, useCallback, useEffect } from "react";
-import { BookCover } from "@/types";
+import { useRef, useState, useEffect } from "react";
 import { loadKioskConfig } from "@/lib/kiosk";
 
 export default function HomePage() {
@@ -31,101 +30,23 @@ export default function HomePage() {
     }, 1500);
   };
 
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [overIdx, setOverIdx] = useState<number | null>(null);
-  const dragNode = useRef<HTMLElement | null>(null);
-  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
-  const isDragging = useRef(false);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const getReordered = useCallback(
-    (from: number, to: number): BookCover[] => {
+  const handleCardTap = (idx: number) => {
+    if (selectedIdx === null) {
+      // 첫 번째 탭: 이동할 카드 선택
+      setSelectedIdx(idx);
+    } else if (selectedIdx === idx) {
+      // 같은 카드 다시 탭: 선택 해제
+      setSelectedIdx(null);
+    } else {
+      // 두 번째 탭: 선택한 카드를 이 위치로 이동
       const arr = [...covers];
-      const [moved] = arr.splice(from, 1);
-      arr.splice(to, 0, moved);
-      return arr;
-    },
-    [covers]
-  );
-
-  const handleDragStart = (e: React.DragEvent, idx: number) => {
-    setDragIdx(idx);
-    dragNode.current = e.currentTarget as HTMLElement;
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragIdx !== null && idx !== overIdx) {
-      setOverIdx(idx);
+      const [moved] = arr.splice(selectedIdx, 1);
+      arr.splice(idx, 0, moved);
+      reorderCovers(arr);
+      setSelectedIdx(null);
     }
-  };
-
-  const handleDrop = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    if (dragIdx !== null && dragIdx !== idx) {
-      reorderCovers(getReordered(dragIdx, idx));
-    }
-    setDragIdx(null);
-    setOverIdx(null);
-  };
-
-  const handleDragEnd = () => {
-    setDragIdx(null);
-    setOverIdx(null);
-  };
-
-  // Touch drag-and-drop (iPad)
-  const handleTouchStart = (e: React.TouchEvent, idx: number) => {
-    const touch = e.touches[0];
-    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-    isDragging.current = false;
-
-    const timer = setTimeout(() => {
-      isDragging.current = true;
-      setDragIdx(idx);
-      if (navigator.vibrate) navigator.vibrate(30);
-    }, 300);
-
-    const el = e.currentTarget as HTMLElement;
-    const cancelLongPress = () => {
-      clearTimeout(timer);
-      el.removeEventListener("touchmove", onMove);
-      el.removeEventListener("touchend", cancelLongPress);
-    };
-    const onMove = (ev: TouchEvent) => {
-      const t = ev.touches[0];
-      const dx = Math.abs(t.clientX - touchStartPos.current!.x);
-      const dy = Math.abs(t.clientY - touchStartPos.current!.y);
-      if (!isDragging.current && (dx > 10 || dy > 10)) {
-        cancelLongPress();
-      }
-    };
-    el.addEventListener("touchmove", onMove, { passive: true });
-    el.addEventListener("touchend", cancelLongPress, { once: true });
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging.current || dragIdx === null) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (el) {
-      const card = el.closest("[data-idx]") as HTMLElement | null;
-      if (card) {
-        const idx = Number(card.dataset.idx);
-        if (!isNaN(idx)) setOverIdx(idx);
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (isDragging.current && dragIdx !== null && overIdx !== null && dragIdx !== overIdx) {
-      reorderCovers(getReordered(dragIdx, overIdx));
-    }
-    isDragging.current = false;
-    setDragIdx(null);
-    setOverIdx(null);
   };
 
   return (
@@ -160,29 +81,25 @@ export default function HomePage() {
             </button>
           </div>
         ) : (
-          <div
-            className="flex flex-wrap gap-3 select-none"
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
+          <div className="flex flex-wrap gap-3 select-none">
             {covers.map((cover, idx) => (
               <button
                 key={cover.id}
-                data-idx={idx}
-                draggable
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDrop={(e) => handleDrop(e, idx)}
-                onDragEnd={handleDragEnd}
-                onTouchStart={(e) => handleTouchStart(e, idx)}
                 onClick={() => {
-                  if (!isDragging.current) router.push(`/booth/${cover.id}`);
+                  if (selectedIdx !== null) {
+                    handleCardTap(idx);
+                  } else {
+                    router.push(`/booth/${cover.id}`);
+                  }
+                }}
+                onDoubleClick={() => {
+                  handleCardTap(idx);
                 }}
                 className={`group bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-200 flex flex-col w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(25%-0.5625rem)] ${
-                  dragIdx === idx
-                    ? "opacity-50 border-primary scale-95"
-                    : overIdx === idx && dragIdx !== null
-                    ? "border-primary border-dashed"
+                  selectedIdx === idx
+                    ? "border-primary scale-95 ring-4 ring-primary/30"
+                    : selectedIdx !== null
+                    ? "border-dashed border-gray-300 opacity-80 hover:border-primary hover:opacity-100"
                     : "border-transparent hover:border-primary active:scale-95"
                 }`}
               >
