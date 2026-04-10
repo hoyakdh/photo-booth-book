@@ -163,6 +163,13 @@ export default function AdminPage() {
           >
             백업 가져오기
           </button>
+          <a
+            href="https://drive.google.com/uc?export=download&id=1G0zJE-mhaK9BiBHdiOjiK4C5CVkwJTEk"
+            download
+            className="px-4 py-2 bg-gray-600 text-white rounded-xl text-sm font-bold btn-touch text-center"
+          >
+            샘플 파일 다운로드
+          </a>
           <input
             ref={importInputRef}
             type="file"
