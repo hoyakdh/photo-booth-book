@@ -14,6 +14,7 @@ import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
 import { FrameBuffer } from "@/lib/gifEncoder";
+import { useHandDetection } from "@/hooks/useHandDetection";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -433,6 +434,13 @@ export default function CapturePage() {
     startCountdownRef.current();
   }, [countdown]);
 
+  // 손바닥 감지 자동 촬영
+  const { isSupported: handSupported, isLoading: handLoading, palmDetected } = useHandDetection({
+    videoRef,
+    enabled: isReady && countdown === null && !capturing && !flash,
+    onPalmDetected: handleCapture,
+  });
+
   // 결과 보기
   const setGifFrames = usePhotoStore((s) => s.setGifFrames);
   const handleViewResults = () => {
@@ -605,27 +613,51 @@ export default function CapturePage() {
       </div>
 
       {/* 하단 컨트롤 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80">
-        <button
-          onClick={() => { stopCamera(); router.push(`/booth/${id}`); }}
-          className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch"
-        >&larr;</button>
+      <div className="flex-shrink-0 flex flex-col items-center gap-2 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80">
+        {/* 손바닥 감지 안내 */}
+        {handSupported && isReady && countdown === null && !capturing && (
+          <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
+            palmDetected
+              ? "bg-green-500/80 text-white"
+              : handLoading
+                ? "bg-white/10 text-white/40"
+                : "bg-white/10 text-white/60"
+          }`}>
+            <span className="text-base">{palmDetected ? "✋" : "🖐"}</span>
+            <span>
+              {handLoading
+                ? "손바닥 인식 준비 중..."
+                : palmDetected
+                  ? "손바닥 감지됨!"
+                  : "손바닥을 보여주면 자동 촬영"}
+            </span>
+          </div>
+        )}
 
-        <button
-          onClick={handleCapture}
-          disabled={!isReady || countdown !== null || capturing}
-          className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch"
-        >
-          <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
-        </button>
+        <div className="w-full flex items-center justify-between">
+          <button
+            onClick={() => { stopCamera(); router.push(`/booth/${id}`); }}
+            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch"
+          >&larr;</button>
 
-        <button
-          onClick={handleViewResults}
-          disabled={photos.length === 0}
-          className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-30 btn-touch"
-        >
-          {photos.length > 0 ? photos.length : ""}
-        </button>
+          <button
+            onClick={handleCapture}
+            disabled={!isReady || countdown !== null || capturing}
+            className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch ${
+              palmDetected ? "ring-4 ring-green-400 ring-offset-2 ring-offset-black" : ""
+            }`}
+          >
+            <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
+          </button>
+
+          <button
+            onClick={handleViewResults}
+            disabled={photos.length === 0}
+            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-30 btn-touch"
+          >
+            {photos.length > 0 ? photos.length : ""}
+          </button>
+        </div>
       </div>
     </div>
   );
