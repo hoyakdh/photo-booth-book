@@ -384,7 +384,7 @@ export default function CapturePage() {
         router.push(`/booth/${id}/result`);
       }
     } else {
-      // 1컷 모드: 고화질 캡처
+      // 1컷 모드: 고화질 캡처 → 바로 결과 화면으로 이동
       if (hiRes) {
         if (wmConfigRef.current?.enabled) {
           const ctx = hiRes.getContext("2d")!;
@@ -397,7 +397,11 @@ export default function CapturePage() {
           capturedAt: Date.now(),
         });
       }
-      setShowGuide(true);
+      if (frameBufferRef.current && frameBufferRef.current.length > 0) {
+        usePhotoStore.getState().setGifFrames(frameBufferRef.current.getFramesAsCanvases());
+      }
+      stopCamera();
+      router.push(`/booth/${id}/result`);
     }
   };
 
