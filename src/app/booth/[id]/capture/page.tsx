@@ -15,6 +15,7 @@ import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
 import { FrameBuffer } from "@/lib/gifEncoder";
 import { useHandDetection } from "@/hooks/useHandDetection";
+import { useVoiceDetection } from "@/hooks/useVoiceDetection";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -441,6 +442,12 @@ export default function CapturePage() {
     onPalmDetected: handleCapture,
   });
 
+  // 음성("치즈") 감지 자동 촬영
+  const { isSupported: voiceSupported, isListening, cheeseDetected } = useVoiceDetection({
+    enabled: isReady && countdown === null && !capturing && !flash,
+    onCheeseDetected: handleCapture,
+  });
+
   // 결과 보기
   const setGifFrames = usePhotoStore((s) => s.setGifFrames);
   const handleViewResults = () => {
@@ -614,23 +621,45 @@ export default function CapturePage() {
 
       {/* 하단 컨트롤 */}
       <div className="flex-shrink-0 flex flex-col items-center gap-2 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80">
-        {/* 손바닥 감지 안내 */}
-        {handSupported && isReady && countdown === null && !capturing && (
-          <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
-            palmDetected
-              ? "bg-green-500/80 text-white"
-              : handLoading
-                ? "bg-white/10 text-white/40"
-                : "bg-white/10 text-white/60"
-          }`}>
-            <span className="text-base">{palmDetected ? "✋" : "🖐"}</span>
-            <span>
-              {handLoading
-                ? "손바닥 인식 준비 중..."
-                : palmDetected
-                  ? "손바닥 감지됨!"
-                  : "손바닥을 보여주면 자동 촬영"}
-            </span>
+        {/* 자동 촬영 안내 */}
+        {isReady && countdown === null && !capturing && (
+          <div className="flex items-center gap-2">
+            {handSupported && (
+              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
+                palmDetected
+                  ? "bg-green-500/80 text-white"
+                  : handLoading
+                    ? "bg-white/10 text-white/40"
+                    : "bg-white/10 text-white/60"
+              }`}>
+                <span className="text-base">{palmDetected ? "✋" : "🖐"}</span>
+                <span>
+                  {handLoading
+                    ? "준비 중..."
+                    : palmDetected
+                      ? "손바닥 감지!"
+                      : "손바닥"}
+                </span>
+              </div>
+            )}
+            {voiceSupported && (
+              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
+                cheeseDetected
+                  ? "bg-green-500/80 text-white"
+                  : !isListening
+                    ? "bg-white/10 text-white/40"
+                    : "bg-white/10 text-white/60"
+              }`}>
+                <span className="text-base">{cheeseDetected ? "🧀" : "🎤"}</span>
+                <span>
+                  {!isListening
+                    ? "준비 중..."
+                    : cheeseDetected
+                      ? "치즈 감지!"
+                      : "\"치즈\""}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -644,7 +673,7 @@ export default function CapturePage() {
             onClick={handleCapture}
             disabled={!isReady || countdown !== null || capturing}
             className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch ${
-              palmDetected ? "ring-4 ring-green-400 ring-offset-2 ring-offset-black" : ""
+              palmDetected || cheeseDetected ? "ring-4 ring-green-400 ring-offset-2 ring-offset-black" : ""
             }`}
           >
             <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
