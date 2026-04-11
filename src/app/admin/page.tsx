@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
 import { generateId, fileToDataURL, resizeImage } from "@/lib/utils";
@@ -12,7 +12,9 @@ import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { covers, loading, addCover, removeCover } = useBookCovers();
+  const { covers, loading, addCover, removeCover, reorderCovers } = useBookCovers();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [maskData, setMaskData] = useState<string | null>(null);
@@ -111,6 +113,99 @@ export default function AdminPage() {
       await removeCover(id);
     }
   };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === covers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(covers.map((c) => c.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    const selectedNames = covers
+      .filter((c) => selectedIds.has(c.id))
+      .map((c) => c.name);
+    const nameList = selectedNames.length <= 5
+      ? selectedNames.map((n) => `  - ${n}`).join("\n")
+      : selectedNames.slice(0, 5).map((n) => `  - ${n}`).join("\n") + `\n  ...외 ${selectedNames.length - 5}개`;
+    const label = selectedIds.size === covers.length ? "전체" : `선택한 ${selectedIds.size}개의`;
+    if (!confirm(`${label} 책표지를 삭제할까요?\n\n${nameList}`)) return;
+    for (const sid of selectedIds) {
+      await removeCover(sid);
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
+  };
+
+  // 길게 누르기로 선택 모드 진입
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
+  const handleLongPressStart = useCallback((id: string) => {
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setSelectMode(true);
+      setSelectedIds(new Set([id]));
+    }, 500);
+  }, []);
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  // 드래그 정렬
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragNodeRef = useRef<HTMLDivElement | null>(null);
+  const dragStartYRef = useRef(0);
+  const dragItemHeightRef = useRef(0);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const handleDragStart = useCallback((e: React.PointerEvent, index: number) => {
+    if (selectMode) return;
+    const el = e.currentTarget as HTMLDivElement;
+    el.setPointerCapture(e.pointerId);
+    dragNodeRef.current = el;
+    dragStartYRef.current = e.clientY;
+    dragItemHeightRef.current = el.getBoundingClientRect().height + 12; // gap 포함
+    setDragIndex(index);
+    setDragOverIndex(index);
+  }, [selectMode]);
+
+  const handleDragMove = useCallback((e: React.PointerEvent) => {
+    if (dragIndex === null) return;
+    const delta = e.clientY - dragStartYRef.current;
+    const indexDelta = Math.round(delta / dragItemHeightRef.current);
+    const newOver = Math.max(0, Math.min(covers.length - 1, dragIndex + indexDelta));
+    setDragOverIndex(newOver);
+  }, [dragIndex, covers.length]);
+
+  const handleDragEnd = useCallback(async () => {
+    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      const reordered = [...covers];
+      const [moved] = reordered.splice(dragIndex, 1);
+      reordered.splice(dragOverIndex, 0, moved);
+      await reorderCovers(reordered);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+    dragNodeRef.current = null;
+  }, [dragIndex, dragOverIndex, covers, reorderCovers]);
 
   const handleReset = () => {
     setName("");
@@ -257,9 +352,47 @@ export default function AdminPage() {
 
       {/* 등록된 책표지 목록 */}
       <div className="space-y-3">
-        <h2 className="text-lg font-bold text-foreground">
-          등록된 책표지 ({covers.length}개)
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-foreground">
+            등록된 책표지 ({covers.length}개)
+          </h2>
+          {covers.length > 0 && (
+            <button
+              onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+              className={`px-4 py-2 rounded-xl text-sm font-medium btn-touch ${
+                selectMode ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              {selectMode ? "취소" : "선택"}
+            </button>
+          )}
+        </div>
+
+        {/* 선택 모드 액션바 */}
+        {selectMode && covers.length > 0 && (
+          <div className="flex items-center gap-3 bg-gray-100 rounded-xl p-3">
+            <button
+              onClick={toggleSelectAll}
+              className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium border border-gray-300 btn-touch"
+            >
+              {selectedIds.size === covers.length ? "전체 해제" : "전체 선택"}
+            </button>
+            <span className="text-sm text-gray-500 flex-1">
+              {selectedIds.size}개 선택됨
+            </span>
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.size === 0}
+              className="px-4 py-1.5 bg-danger text-white rounded-lg text-sm font-bold btn-touch disabled:opacity-40"
+            >
+              삭제
+            </button>
+          </div>
+        )}
+
+        {!selectMode && covers.length > 1 && (
+          <p className="text-xs text-gray-400">길게 눌러 선택 / 왼쪽 핸들을 드래그하여 순서 변경</p>
+        )}
 
         {loading ? (
           <div className="text-center py-10 text-gray-400">불러오는 중...</div>
@@ -268,35 +401,82 @@ export default function AdminPage() {
             아직 등록된 책표지가 없어요
           </div>
         ) : (
-          covers.map((cover) => (
-            <div
-              key={cover.id}
-              className="flex items-center gap-4 bg-white rounded-2xl shadow p-3 border border-gray-100"
-            >
-              <img
-                src={cover.previewData || cover.imageData}
-                alt={cover.name}
-                className="w-20 h-28 object-cover rounded-lg"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-lg truncate">{cover.name}</p>
-                <p className="text-xs text-gray-400">
-                  {new Date(cover.createdAt).toLocaleDateString("ko-KR")}
-                </p>
-                {cover.maskData && (
-                  <span className="text-xs text-green-500 font-medium">크로마키 설정됨</span>
+          <div ref={listRef} className="space-y-3">
+            {covers.map((cover, index) => (
+              <div
+                key={cover.id}
+                onClick={() => {
+                  if (longPressTriggeredRef.current) return;
+                  if (selectMode) toggleSelect(cover.id);
+                }}
+                onPointerDown={(e) => {
+                  if (!selectMode) handleLongPressStart(cover.id);
+                }}
+                onPointerUp={handleLongPressEnd}
+                onPointerCancel={handleLongPressEnd}
+                className={`flex items-center gap-3 bg-white rounded-2xl shadow p-3 border-2 transition-all select-none ${
+                  selectMode && selectedIds.has(cover.id)
+                    ? "border-primary bg-primary/5"
+                    : dragOverIndex !== null && dragIndex !== null && index === dragOverIndex && index !== dragIndex
+                      ? "border-blue-400 border-dashed"
+                      : "border-gray-100"
+                } ${selectMode ? "cursor-pointer" : ""} ${
+                  dragIndex === index ? "opacity-50 scale-95" : ""
+                }`}
+              >
+                {/* 선택 모드: 체크박스 */}
+                {selectMode && (
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    selectedIds.has(cover.id)
+                      ? "bg-primary border-primary text-white"
+                      : "border-gray-300"
+                  }`}>
+                    {selectedIds.has(cover.id) && <span className="text-xs font-bold">✓</span>}
+                  </div>
+                )}
+                {/* 일반 모드: 드래그 핸들 */}
+                {!selectMode && covers.length > 1 && (
+                  <div
+                    className="flex-shrink-0 w-8 h-12 flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing text-gray-300 touch-none"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      handleLongPressEnd();
+                      handleDragStart(e, index);
+                    }}
+                    onPointerMove={handleDragMove}
+                    onPointerUp={(e) => { e.stopPropagation(); handleDragEnd(); }}
+                    onPointerCancel={() => { setDragIndex(null); setDragOverIndex(null); }}
+                  >
+                    <span className="text-lg leading-none">⠿</span>
+                  </div>
+                )}
+                <img
+                  src={cover.previewData || cover.imageData}
+                  alt={cover.name}
+                  className="w-20 h-28 object-cover rounded-lg flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-lg truncate">{cover.name}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(cover.createdAt).toLocaleDateString("ko-KR")}
+                  </p>
+                  {cover.maskData && (
+                    <span className="text-xs text-green-500 font-medium">크로마키 설정됨</span>
+                  )}
+                </div>
+                {!selectMode && (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(cover.id); }}
+                      className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 )}
               </div>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => handleDelete(cover.id)}
-                  className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"
-                >
-                  삭제
-                </button>
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
       {/* 워터마크 설정 */}
