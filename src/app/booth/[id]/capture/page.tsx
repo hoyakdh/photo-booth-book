@@ -46,7 +46,8 @@ export default function CapturePage() {
   const [currentCut, setCurrentCut] = useState(0);
   const currentCutRef = useRef(0);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const capturingRef = useRef(false); // 멀티컷 촬영 진행 중 플래그
+  const capturingRef = useRef(false);
+  const [capturing, setCapturing] = useState(false); // 멀티컷 촬영 진행 중 (UI용)
   const [flash, setFlash] = useState(false);
   const [cameraStarted, setCameraStarted] = useState(false);
   const [maskLoaded, setMaskLoaded] = useState(false);
@@ -358,13 +359,14 @@ export default function CapturePage() {
 
       const nextCut = cut + 1;
       if (nextCut < cuts) {
-        capturingRef.current = true; // 다음 컷 대기 중 버튼 비활성화
+        capturingRef.current = true;
+        setCapturing(true);
         currentCutRef.current = nextCut;
         setCurrentCut(nextCut);
         setupCurrentCut(nextCut);
         setZoom(1); setOffsetX(0); setOffsetY(0);
         setTimeout(updateGuideBounds, 100);
-        setTimeout(() => { capturingRef.current = false; startCountdownRef.current(); }, 2000);
+        setTimeout(() => { capturingRef.current = false; setCapturing(false); startCountdownRef.current(); }, 2000);
       } else {
         // 모든 컷 완료
         if (compositeCanvasRef.current) {
@@ -611,7 +613,7 @@ export default function CapturePage() {
 
         <button
           onClick={handleCapture}
-          disabled={!isReady || countdown !== null}
+          disabled={!isReady || countdown !== null || capturing}
           className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch"
         >
           <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
