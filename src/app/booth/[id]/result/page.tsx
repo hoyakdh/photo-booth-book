@@ -6,6 +6,7 @@ import { usePhotoStore } from "@/store/usePhotoStore";
 import { useBookCover } from "@/hooks/useBookCovers";
 import StickerEditor from "@/components/StickerEditor";
 import { createGif } from "@/lib/gifEncoder";
+import { uploadToDrive } from "@/lib/drive";
 
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,8 @@ export default function ResultPage() {
   const [saved, setSaved] = useState(false);
   const [showSticker, setShowSticker] = useState(false);
   const [gifCreating, setGifCreating] = useState(false);
+  const [driveState, setDriveState] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [driveError, setDriveError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
@@ -99,6 +102,35 @@ export default function ResultPage() {
       setGifCreating(false);
     }
   }, [gifFrames]);
+
+  const handleDriveSave = useCallback(async () => {
+    if (!selectedPhoto) return;
+    setDriveError(null);
+    setDriveState("uploading");
+    try {
+      const ts = Date.now();
+
+      // PNG 준비
+      const pngRes = await fetch(selectedPhoto.imageData);
+      const pngBlob = await pngRes.blob();
+      const files: { blob: Blob; name: string; mime: string }[] = [
+        { blob: pngBlob, name: `photo-booth-${ts}.png`, mime: "image/png" },
+      ];
+
+      // GIF 프레임이 있으면 GIF도 함께 업로드
+      if (gifFrames.length > 0) {
+        const gifBlob = await createGif(gifFrames, 8, 10);
+        files.push({ blob: gifBlob, name: `photo-booth-${ts}.gif`, mime: "image/gif" });
+      }
+
+      await uploadToDrive(files);
+      setDriveState("done");
+    } catch (err) {
+      console.error("드라이브 업로드 실패:", err);
+      setDriveError(err instanceof Error ? err.message : "업로드 실패");
+      setDriveState("error");
+    }
+  }, [selectedPhoto, gifFrames]);
 
   const handleRetake = () => {
     router.push(`/booth/${id}/capture`);
@@ -188,8 +220,25 @@ export default function ResultPage() {
         </div>
       )}
 
+      {/* 드라이브 상태 토스트 */}
+      {driveState !== "idle" && (
+        <div
+          className={`mx-4 mb-2 px-3 py-2 rounded-xl text-sm font-medium text-center ${
+            driveState === "uploading"
+              ? "bg-gray-100 text-gray-700"
+              : driveState === "done"
+              ? "bg-success text-white"
+              : "bg-danger text-white"
+          }`}
+        >
+          {driveState === "uploading" && "구글 드라이브에 업로드 중..."}
+          {driveState === "done" && "구글 드라이브에 저장되었습니다"}
+          {driveState === "error" && `저장 실패: ${driveError ?? ""}`}
+        </div>
+      )}
+
       {/* 하단 버튼 */}
-      <div className="flex gap-2 px-4 py-4 bg-white">
+      <div className="flex gap-2 px-4 py-4 bg-white flex-wrap">
         <button
           onClick={handleDownload}
           className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors ${
@@ -197,6 +246,13 @@ export default function ResultPage() {
           }`}
         >
           {saved ? "저장 완료!" : "저장"}
+        </button>
+        <button
+          onClick={handleDriveSave}
+          disabled={driveState === "uploading"}
+          className="py-3 px-3 bg-blue-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50"
+        >
+          {driveState === "uploading" ? "업로드중..." : "드라이브"}
         </button>
         <button
           onClick={() => setShowSticker(true)}
