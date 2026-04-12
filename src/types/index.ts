@@ -6,6 +6,7 @@ export interface BookCover {
   previewData?: string; // Base64 data URL (크로마키 영역 표시된 미리보기)
   createdAt: number;
   order?: number;
+  defaultZoom?: number; // 촬영 진입 시 자동 적용할 기본 줌 (없거나 1 = 기본)
 }
 
 export interface CapturedPhoto {

@@ -68,6 +68,18 @@ export default function CapturePage() {
     transformRef.current = { zoom, offsetX, offsetY };
   }, [zoom, offsetX, offsetY]);
 
+  // 책표지에 기본 줌이 설정되어 있으면 촬영 진입 시 자동 적용
+  const defaultZoomAppliedRef = useRef(false);
+  useEffect(() => {
+    if (defaultZoomAppliedRef.current) return;
+    if (!cover) return;
+    const dz = cover.defaultZoom;
+    if (typeof dz === "number" && dz >= MIN_ZOOM && dz <= MAX_ZOOM && dz !== 1) {
+      setZoom(dz);
+    }
+    defaultZoomAppliedRef.current = true;
+  }, [cover]);
+
   // 핀치 줌
   const lastPinchDistRef = useRef<number | null>(null);
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -558,7 +570,8 @@ export default function CapturePage() {
 
         {flash && <div className="absolute inset-0 bg-white z-30 animate-flash" />}
 
-        {/* 줌 컨트롤 */}
+        {/* 줌 컨트롤 — 촬영 중에는 숨김 */}
+        {countdown === null && !capturing && (
         <div className="absolute right-3 bottom-3 flex flex-col items-center gap-2 z-10">
           <button onClick={() => setShowZoomUI((v) => !v)} className="w-10 h-10 bg-black/50 backdrop-blur rounded-full flex items-center justify-center text-white text-lg font-bold btn-touch">
             {zoom > 1 ? `${zoom.toFixed(1)}x` : "ZM"}
@@ -602,8 +615,9 @@ export default function CapturePage() {
             </div>
           )}
         </div>
+        )}
 
-        {zoom > 1 && showZoomUI && (
+        {countdown === null && !capturing && zoom > 1 && showZoomUI && (
           <div className="absolute left-3 bottom-3 z-10">
             <div className="bg-black/60 backdrop-blur rounded-2xl p-2 flex flex-col items-center gap-1">
               <p className="text-white text-[10px] mb-1">위치</p>
@@ -666,7 +680,8 @@ export default function CapturePage() {
         <div className="w-full flex items-center justify-between">
           <button
             onClick={() => { stopCamera(); router.push(`/booth/${id}`); }}
-            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch"
+            disabled={countdown !== null || capturing}
+            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-xl btn-touch disabled:opacity-30 disabled:cursor-not-allowed"
           >&larr;</button>
 
           <button
@@ -681,8 +696,8 @@ export default function CapturePage() {
 
           <button
             onClick={handleViewResults}
-            disabled={photos.length === 0}
-            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-30 btn-touch"
+            disabled={photos.length === 0 || countdown !== null || capturing}
+            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-30 disabled:cursor-not-allowed btn-touch"
           >
             {photos.length > 0 ? photos.length : ""}
           </button>

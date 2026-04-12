@@ -18,7 +18,7 @@ interface UseCameraReturn {
 }
 
 export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
-  const { facingMode = "user", width = 1280, height = 960 } = options;
+  const { facingMode = "user", width = 1920, height = 1080 } = options;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);

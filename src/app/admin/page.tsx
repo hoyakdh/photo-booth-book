@@ -12,7 +12,7 @@ import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { covers, loading, addCover, removeCover, reorderCovers } = useBookCovers();
+  const { covers, loading, addCover, removeCover, updateCover, reorderCovers } = useBookCovers();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [name, setName] = useState("");
@@ -462,6 +462,30 @@ export default function AdminPage() {
                   </p>
                   {cover.maskData && (
                     <span className="text-xs text-green-500 font-medium">크로마키 설정됨</span>
+                  )}
+                  {!selectMode && (
+                    <div
+                      className="mt-2 flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-xs text-gray-500">기본 줌</span>
+                      <input
+                        type="range"
+                        min={1}
+                        max={5}
+                        step={0.1}
+                        value={cover.defaultZoom ?? 1}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          updateCover({ ...cover, defaultZoom: v });
+                        }}
+                        className="flex-1 max-w-[160px] accent-primary"
+                      />
+                      <span className="text-xs font-bold w-10 text-right">
+                        {(cover.defaultZoom ?? 1).toFixed(1)}x
+                      </span>
+                    </div>
                   )}
                 </div>
                 {!selectMode && (
