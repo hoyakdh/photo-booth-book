@@ -21,14 +21,18 @@ export default function ResultPage() {
   const [gifCreating, setGifCreating] = useState(false);
   const [driveState, setDriveState] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [driveError, setDriveError] = useState<string | null>(null);
+  const [askGoHome, setAskGoHome] = useState(false);
+  const [localSaving, setLocalSaving] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
   const selectedPhoto = photos[selectedIdx];
+  const busy = driveState === "uploading" || localSaving || gifCreating;
 
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
-
+    setLocalSaving(true);
+    try {
     const ts = Date.now();
 
     // PNG 준비
@@ -84,6 +88,10 @@ export default function ResultPage() {
       triggerDownload(gifFile);
     }
     setSaved(true);
+    setAskGoHome(true);
+    } finally {
+      setLocalSaving(false);
+    }
   }, [selectedPhoto, gifFrames]);
 
   const handleStickerSave = useCallback((editedImage: string) => {
@@ -153,6 +161,7 @@ export default function ResultPage() {
 
       await uploadToDrive(files);
       setDriveState("done");
+      setAskGoHome(true);
     } catch (err) {
       console.error("드라이브 업로드 실패:", err);
       setDriveError(err instanceof Error ? err.message : "업로드 실패");
@@ -194,11 +203,41 @@ export default function ResultPage() {
         />
       )}
 
+      {/* 저장 완료 후 홈 이동 확인 */}
+      {askGoHome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <p className="text-xl font-bold mb-2">저장 완료!</p>
+            <p className="text-gray-500 text-sm mb-6">
+              홈 화면으로 돌아갈까요?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAskGoHome(false)}
+                className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold btn-touch"
+              >
+                계속 보기
+              </button>
+              <button
+                onClick={() => {
+                  setAskGoHome(false);
+                  handleHome();
+                }}
+                className="flex-1 py-3 bg-primary text-white rounded-2xl font-bold btn-touch"
+              >
+                홈으로
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <header className="flex items-center justify-between px-4 py-3 bg-white shadow-sm">
         <button
           onClick={handleRetake}
-          className="text-primary font-medium btn-touch"
+          disabled={busy}
+          className="text-primary font-medium btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
         >
           &larr; 다시 촬영
         </button>
@@ -207,7 +246,8 @@ export default function ResultPage() {
         </h1>
         <button
           onClick={handleHome}
-          className="text-gray-400 text-sm btn-touch"
+          disabled={busy}
+          className="text-gray-400 text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
         >
           홈으로
         </button>
@@ -234,7 +274,8 @@ export default function ResultPage() {
                 setSelectedIdx(idx);
                 setSaved(false);
               }}
-              className={`flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+              disabled={busy}
+              className={`flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden border-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 idx === selectedIdx ? "border-primary" : "border-transparent"
               }`}
             >
@@ -269,8 +310,8 @@ export default function ResultPage() {
       <div className="flex gap-2 px-4 py-4 bg-white flex-wrap">
         <button
           onClick={handleDriveSave}
-          disabled={driveState === "uploading"}
-          className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors disabled:opacity-50 ${
+          disabled={busy}
+          className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             driveState === "done" ? "bg-success text-white" : "bg-primary text-white"
           }`}
         >
@@ -282,36 +323,40 @@ export default function ResultPage() {
         </button>
         <button
           onClick={handleDownload}
-          className={`py-3 px-3 rounded-2xl font-bold text-sm btn-touch transition-colors ${
+          disabled={busy}
+          className={`py-3 px-3 rounded-2xl font-bold text-sm btn-touch transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             saved ? "bg-success text-white" : "bg-blue-500 text-white"
           }`}
         >
-          {saved ? "저장 완료!" : "저장"}
+          {localSaving ? "저장중..." : saved ? "저장 완료!" : "저장"}
         </button>
         {gifFrames.length > 0 && (
           <button
             onClick={handleGifSave}
-            disabled={gifCreating}
-            className="py-3 px-3 bg-purple-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50"
+            disabled={busy}
+            className="py-3 px-3 bg-purple-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {gifCreating ? "생성중..." : "GIF"}
           </button>
         )}
         <button
           onClick={() => setShowSticker(true)}
-          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch"
+          disabled={busy}
+          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
         >
           꾸미기
         </button>
         <button
           onClick={handleRetake}
-          className="py-3 px-3 bg-secondary text-white rounded-2xl font-bold text-sm btn-touch"
+          disabled={busy}
+          className="py-3 px-3 bg-secondary text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
         >
           다시촬영
         </button>
         <button
           onClick={handleHome}
-          className="py-3 px-3 bg-gray-300 text-gray-700 rounded-2xl font-bold text-sm btn-touch"
+          disabled={busy}
+          className="py-3 px-3 bg-gray-300 text-gray-700 rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
         >
           홈
         </button>
