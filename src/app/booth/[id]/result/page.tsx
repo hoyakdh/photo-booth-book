@@ -260,12 +260,6 @@ export default function ResultPage() {
         >
           {saved ? "저장 완료!" : "저장"}
         </button>
-        <button
-          onClick={() => setShowSticker(true)}
-          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch"
-        >
-          꾸미기
-        </button>
         {gifFrames.length > 0 && (
           <button
             onClick={handleGifSave}
@@ -275,6 +269,12 @@ export default function ResultPage() {
             {gifCreating ? "생성중..." : "GIF"}
           </button>
         )}
+        <button
+          onClick={() => setShowSticker(true)}
+          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch"
+        >
+          꾸미기
+        </button>
         <button
           onClick={handleRetake}
           className="py-3 px-3 bg-secondary text-white rounded-2xl font-bold text-sm btn-touch"
