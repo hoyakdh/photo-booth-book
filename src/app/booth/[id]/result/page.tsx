@@ -106,39 +106,6 @@ export default function ResultPage() {
     setSaved(false);
   }, [selectedPhoto, selectedIdx]);
 
-  const handleGifSave = useCallback(async () => {
-    if (gifFrames.length === 0) return;
-    setGifCreating(true);
-    try {
-      const blob = await createGif(gifFrames, 8, 10);
-
-      if (navigator.share && navigator.canShare) {
-        try {
-          const file = new File([blob], `photo-booth-${Date.now()}.gif`, { type: "image/gif" });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file] });
-            return;
-          }
-        } catch {
-          // 사용자가 공유 시트를 취소한 경우 — fallback으로 진행
-        }
-      }
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `photo-booth-${Date.now()}.gif`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("GIF 생성 실패:", err);
-    } finally {
-      setGifCreating(false);
-    }
-  }, [gifFrames]);
-
   const handleDriveSave = useCallback(async () => {
     if (!selectedPhoto) return;
     setDriveError(null);
@@ -330,15 +297,6 @@ export default function ResultPage() {
         >
           {localSaving ? "저장중..." : saved ? "저장 완료!" : "저장"}
         </button>
-        {gifFrames.length > 0 && (
-          <button
-            onClick={handleGifSave}
-            disabled={busy}
-            className="py-3 px-3 bg-purple-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {gifCreating ? "생성중..." : "GIF"}
-          </button>
-        )}
         <button
           onClick={() => setShowSticker(true)}
           disabled={busy}
