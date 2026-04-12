@@ -528,21 +528,12 @@ export default function AdminPage() {
                         }}
                         className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-base font-bold btn-touch"
                       >−</button>
-                      <input
-                        type="range"
-                        min={1}
-                        max={5}
-                        step={0.1}
-                        value={cover.defaultZoom ?? 1}
-                        onPointerDown={(e) => { e.stopPropagation(); handleLongPressEnd(); }}
-                        onPointerMove={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          const v = parseFloat(e.target.value);
-                          updateCover({ ...cover, defaultZoom: v });
-                        }}
-                        className="flex-1 max-w-[140px] accent-primary touch-none"
-                      />
+                      <div className="flex-1 max-w-[140px] h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary"
+                          style={{ width: `${(((cover.defaultZoom ?? 1) - 1) / 4) * 100}%` }}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={(e) => {
