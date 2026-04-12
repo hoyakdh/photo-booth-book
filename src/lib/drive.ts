@@ -23,6 +23,8 @@ declare global {
 
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const FOLDER_NAME =
+  process.env.NEXT_PUBLIC_DRIVE_FOLDER_NAME || "Book Photo Booth";
 
 let gsiLoadingPromise: Promise<void> | null = null;
 
@@ -98,11 +100,50 @@ export interface DriveFileInput {
   mime: string;
 }
 
+async function ensureFolder(token: string, name: string): Promise<string> {
+  // drive.file 스코프는 앱이 만든 파일/폴더만 볼 수 있으므로,
+  // 여기서 찾은/만든 폴더가 바로 이 앱 전용 업로드 폴더가 된다.
+  const q = encodeURIComponent(
+    `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  );
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!searchRes.ok) {
+    throw new Error(`폴더 조회 실패 (${searchRes.status}): ${await searchRes.text()}`);
+  }
+  const { files } = (await searchRes.json()) as { files?: { id: string }[] };
+  if (files && files.length > 0) return files[0].id;
+
+  const createRes = await fetch(
+    "https://www.googleapis.com/drive/v3/files?fields=id",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+      }),
+    }
+  );
+  if (!createRes.ok) {
+    throw new Error(`폴더 생성 실패 (${createRes.status}): ${await createRes.text()}`);
+  }
+  const { id } = (await createRes.json()) as { id: string };
+  return id;
+}
+
 async function uploadOne(
   token: string,
-  file: DriveFileInput
+  file: DriveFileInput,
+  folderId?: string
 ): Promise<DriveUploadResult> {
-  const metadata = { name: file.name, mimeType: file.mime };
+  const metadata: Record<string, unknown> = { name: file.name, mimeType: file.mime };
+  if (folderId) metadata.parents = [folderId];
   const form = new FormData();
   form.append(
     "metadata",
@@ -136,9 +177,10 @@ export async function uploadToDrive(
   if (files.length === 0) return [];
   const token = await getAccessToken();
   try {
+    const folderId = await ensureFolder(token, FOLDER_NAME);
     const results: DriveUploadResult[] = [];
     for (const f of files) {
-      results.push(await uploadOne(token, f));
+      results.push(await uploadOne(token, f, folderId));
     }
     return results;
   } finally {
