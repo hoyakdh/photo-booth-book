@@ -57,7 +57,7 @@ export default function BoothStartPage() {
       </div>
 
       {/* START 버튼 */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 flex justify-center bg-gradient-to-t from-black/50 to-transparent">
+      <div className="absolute bottom-0 left-0 right-0 p-6 flex justify-center">
         <button
           onClick={handleStart}
           className="px-12 py-5 bg-primary/70 text-white rounded-full font-black text-2xl shadow-2xl hover:bg-primary-light active:scale-95 transition-all btn-touch"
