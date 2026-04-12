@@ -29,34 +29,62 @@ export default function ResultPage() {
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
 
-    const dataUrl = selectedPhoto.imageData;
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
+    const ts = Date.now();
 
+    // PNG 준비
+    const pngRes = await fetch(selectedPhoto.imageData);
+    const pngBlob = await pngRes.blob();
+    const pngFile = new File([pngBlob], `photo-booth-${ts}.png`, { type: "image/png" });
+
+    // GIF 프레임이 있으면 같이 준비
+    let gifFile: File | null = null;
+    if (gifFrames.length > 0) {
+      try {
+        setGifCreating(true);
+        const gifBlob = await createGif(gifFrames, 8, 10);
+        gifFile = new File([gifBlob], `photo-booth-${ts}.gif`, { type: "image/gif" });
+      } catch (err) {
+        console.error("GIF 생성 실패:", err);
+      } finally {
+        setGifCreating(false);
+      }
+    }
+
+    const filesForShare = gifFile ? [pngFile, gifFile] : [pngFile];
+
+    // 공유 시트로 두 파일 한 번에 시도
     if (navigator.share && navigator.canShare) {
       try {
-        const file = new File([blob], `photo-booth-${Date.now()}.png`, { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file] });
+        if (navigator.canShare({ files: filesForShare })) {
+          await navigator.share({ files: filesForShare });
           setSaved(true);
           return;
         }
       } catch {
-        // 사용자가 공유 시트를 취소한 경우 — fallback으로 진행
+        // 사용자가 취소한 경우 — fallback으로 진행
       }
     }
 
-    // blob URL 사용 (data URL은 iOS Safari에서 download 속성이 작동하지 않음)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `photo-booth-${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Fallback: blob URL 다운로드 (PNG → GIF 순차)
+    const triggerDownload = (file: File) => {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    triggerDownload(pngFile);
+    if (gifFile) {
+      // 브라우저가 다중 다운로드를 허용하도록 살짝 지연
+      await new Promise((r) => setTimeout(r, 300));
+      triggerDownload(gifFile);
+    }
     setSaved(true);
-  }, [selectedPhoto]);
+  }, [selectedPhoto, gifFrames]);
 
   const handleStickerSave = useCallback((editedImage: string) => {
     if (!selectedPhoto) return;
