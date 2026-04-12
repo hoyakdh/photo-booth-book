@@ -88,8 +88,16 @@ export default function AdminPage() {
     setShowChromaEditor(false);
   };
 
+  const [showCopyrightModal, setShowCopyrightModal] = useState(false);
+
+  const handleSubmitClick = () => {
+    if (!name.trim() || !preview) return;
+    setShowCopyrightModal(true);
+  };
+
   const handleSubmit = async () => {
     if (!name.trim() || !preview) return;
+    setShowCopyrightModal(false);
     setIsUploading(true);
 
     try {
@@ -227,6 +235,43 @@ export default function AdminPage() {
         />
       )}
 
+      {/* 저작권 안내 모달 */}
+      {showCopyrightModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold mb-3 text-primary">저작권 안내</h3>
+            <div className="text-sm text-gray-700 space-y-2 mb-5 leading-relaxed">
+              <p>
+                업로드하는 책표지 이미지의 저작권은 해당 저작권자에게 있습니다.
+              </p>
+              <p>
+                등록자는 원저작자의 허가를 받았거나, 저작권법상 허용된 범위
+                (공정 이용·교육 목적 등) 내에서 사용할 책임이 있으며,
+                이로 인해 발생하는 모든 법적 분쟁과 책임은 <b>등록자 본인</b>에게 있습니다.
+              </p>
+              <p>
+                본 서비스는 등록된 이미지의 저작권 침해 여부를 검증하지 않으며,
+                관련 분쟁에 대해 어떠한 책임도 지지 않습니다.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCopyrightModal(false)}
+                className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold btn-touch"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold btn-touch"
+              >
+                동의하고 등록
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">
@@ -340,7 +385,7 @@ export default function AdminPage() {
 
           <div className="flex gap-3">
             <button
-              onClick={handleSubmit}
+              onClick={handleSubmitClick}
               disabled={!name.trim() || !preview || isUploading}
               className="flex-1 py-3 bg-primary text-white rounded-xl font-bold text-lg disabled:opacity-50 btn-touch"
             >
