@@ -634,7 +634,7 @@ export default function CapturePage() {
       </div>
 
       {/* 하단 컨트롤 */}
-      <div className="flex-shrink-0 flex flex-col items-center gap-2 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80">
+      <div className="flex-shrink-0 flex flex-col items-center justify-end gap-2 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80 min-h-[160px]">
         {/* 자동 촬영 안내 */}
         {isReady && countdown === null && !capturing && (
           <div className="flex items-center gap-2">
