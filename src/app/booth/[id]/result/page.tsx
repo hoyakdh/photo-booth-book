@@ -240,19 +240,25 @@ export default function ResultPage() {
       {/* 하단 버튼 */}
       <div className="flex gap-2 px-4 py-4 bg-white flex-wrap">
         <button
+          onClick={handleDriveSave}
+          disabled={driveState === "uploading"}
+          className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors disabled:opacity-50 ${
+            driveState === "done" ? "bg-success text-white" : "bg-primary text-white"
+          }`}
+        >
+          {driveState === "uploading"
+            ? "업로드중..."
+            : driveState === "done"
+            ? "저장 완료!"
+            : "구글 드라이브 저장"}
+        </button>
+        <button
           onClick={handleDownload}
-          className={`flex-1 py-4 rounded-2xl font-bold text-base btn-touch transition-colors ${
-            saved ? "bg-success text-white" : "bg-primary text-white"
+          className={`py-3 px-3 rounded-2xl font-bold text-sm btn-touch transition-colors ${
+            saved ? "bg-success text-white" : "bg-blue-500 text-white"
           }`}
         >
           {saved ? "저장 완료!" : "저장"}
-        </button>
-        <button
-          onClick={handleDriveSave}
-          disabled={driveState === "uploading"}
-          className="py-3 px-3 bg-blue-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50"
-        >
-          {driveState === "uploading" ? "업로드중..." : "드라이브"}
         </button>
         <button
           onClick={() => setShowSticker(true)}

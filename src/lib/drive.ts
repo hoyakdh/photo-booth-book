@@ -1,6 +1,6 @@
 // Google Drive 업로드 유틸 — 방법 1 (OAuth 토큰 클라이언트 + drive.file 스코프)
 // 사용자가 본인 계정으로 로그인 후 본인 드라이브에 파일을 업로드한다.
-// 키오스크/공용 기기 대응: 매 호출마다 계정 선택 → 업로드 → 토큰 폐기.
+// 세션 캐시: 브라우저 탭이 살아있는 동안 토큰/폴더 ID 재사용 (탭 닫으면 자동 삭제).
 
 declare global {
   interface Window {
@@ -11,9 +11,15 @@ declare global {
             client_id: string;
             scope: string;
             prompt?: string;
-            callback: (resp: { access_token?: string; error?: string; error_description?: string }) => void;
+            hint?: string;
+            callback: (resp: {
+              access_token?: string;
+              expires_in?: number | string;
+              error?: string;
+              error_description?: string;
+            }) => void;
             error_callback?: (err: unknown) => void;
-          }) => { requestAccessToken: (overrides?: { prompt?: string }) => void };
+          }) => { requestAccessToken: (overrides?: { prompt?: string; hint?: string }) => void };
           revoke: (token: string, done?: () => void) => void;
         };
       };
@@ -25,6 +31,12 @@ const GSI_SRC = "https://accounts.google.com/gsi/client";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const FOLDER_NAME =
   process.env.NEXT_PUBLIC_DRIVE_FOLDER_NAME || "Book Photo Booth";
+
+const TOKEN_KEY = "drive:accessToken";
+const TOKEN_EXP_KEY = "drive:accessTokenExp";
+const FOLDER_KEY = "drive:folderId";
+// 만료 여유: 실제 만료보다 60초 먼저 새로 발급
+const TOKEN_SKEW_MS = 60_000;
 
 let gsiLoadingPromise: Promise<void> | null = null;
 
@@ -52,7 +64,39 @@ function loadGsi(): Promise<void> {
   return gsiLoadingPromise;
 }
 
-async function getAccessToken(): Promise<string> {
+function readCachedToken(): string | null {
+  try {
+    const tok = sessionStorage.getItem(TOKEN_KEY);
+    const expStr = sessionStorage.getItem(TOKEN_EXP_KEY);
+    if (!tok || !expStr) return null;
+    const exp = Number(expStr);
+    if (!Number.isFinite(exp) || Date.now() > exp - TOKEN_SKEW_MS) return null;
+    return tok;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedToken(token: string, expiresInSec: number) {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + expiresInSec * 1000));
+  } catch {
+    // 무시
+  }
+}
+
+function clearCachedToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_EXP_KEY);
+    sessionStorage.removeItem(FOLDER_KEY);
+  } catch {
+    // 무시
+  }
+}
+
+async function requestNewToken(): Promise<string> {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) throw new Error("NEXT_PUBLIC_GOOGLE_CLIENT_ID 가 설정되지 않았습니다");
 
@@ -63,13 +107,15 @@ async function getAccessToken(): Promise<string> {
     const client = oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
-      // 매번 계정 선택 화면을 보여줘서 공용 기기에서 직전 사용자 계정이 자동선택되지 않도록
       prompt: "select_account",
       callback: (resp) => {
         if (resp.error || !resp.access_token) {
           reject(new Error(resp.error_description || resp.error || "토큰 획득 실패"));
           return;
         }
+        const expiresIn =
+          typeof resp.expires_in === "string" ? parseInt(resp.expires_in, 10) : resp.expires_in ?? 3600;
+        writeCachedToken(resp.access_token, expiresIn || 3600);
         resolve(resp.access_token);
       },
       error_callback: (err) => {
@@ -80,12 +126,28 @@ async function getAccessToken(): Promise<string> {
   });
 }
 
-function revokeToken(token: string) {
-  try {
-    window.google?.accounts.oauth2.revoke(token);
-  } catch {
-    // 무시 — best effort
+async function getAccessToken(forceNew = false): Promise<string> {
+  if (!forceNew) {
+    const cached = readCachedToken();
+    if (cached) return cached;
   }
+  return requestNewToken();
+}
+
+/**
+ * 명시적 로그아웃 — 현재 탭의 캐시된 토큰을 폐기하고 세션 캐시를 삭제한다.
+ * 공용 기기에서 사용자를 마치고 나갈 때 호출.
+ */
+export function signOutDrive() {
+  try {
+    const tok = sessionStorage.getItem(TOKEN_KEY);
+    if (tok) {
+      window.google?.accounts.oauth2.revoke(tok);
+    }
+  } catch {
+    // 무시
+  }
+  clearCachedToken();
 }
 
 export interface DriveUploadResult {
@@ -101,8 +163,14 @@ export interface DriveFileInput {
 }
 
 async function ensureFolder(token: string, name: string): Promise<string> {
-  // drive.file 스코프는 앱이 만든 파일/폴더만 볼 수 있으므로,
-  // 여기서 찾은/만든 폴더가 바로 이 앱 전용 업로드 폴더가 된다.
+  // 세션 내에 이미 확보한 폴더 ID가 있으면 재사용
+  try {
+    const cached = sessionStorage.getItem(FOLDER_KEY);
+    if (cached) return cached;
+  } catch {
+    // 무시
+  }
+
   const q = encodeURIComponent(
     `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
   );
@@ -114,26 +182,35 @@ async function ensureFolder(token: string, name: string): Promise<string> {
     throw new Error(`폴더 조회 실패 (${searchRes.status}): ${await searchRes.text()}`);
   }
   const { files } = (await searchRes.json()) as { files?: { id: string }[] };
-  if (files && files.length > 0) return files[0].id;
-
-  const createRes = await fetch(
-    "https://www.googleapis.com/drive/v3/files?fields=id",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        mimeType: "application/vnd.google-apps.folder",
-      }),
+  let id: string;
+  if (files && files.length > 0) {
+    id = files[0].id;
+  } else {
+    const createRes = await fetch(
+      "https://www.googleapis.com/drive/v3/files?fields=id",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          mimeType: "application/vnd.google-apps.folder",
+        }),
+      }
+    );
+    if (!createRes.ok) {
+      throw new Error(`폴더 생성 실패 (${createRes.status}): ${await createRes.text()}`);
     }
-  );
-  if (!createRes.ok) {
-    throw new Error(`폴더 생성 실패 (${createRes.status}): ${await createRes.text()}`);
+    id = ((await createRes.json()) as { id: string }).id;
   }
-  const { id } = (await createRes.json()) as { id: string };
+
+  try {
+    sessionStorage.setItem(FOLDER_KEY, id);
+  } catch {
+    // 무시
+  }
   return id;
 }
 
@@ -169,21 +246,33 @@ async function uploadOne(
 
 /**
  * 한 번의 로그인/토큰으로 여러 파일을 사용자 드라이브에 업로드한다.
- * 업로드 완료/실패 무관하게 finally에서 토큰을 폐기한다.
+ * 세션에 캐시된 토큰이 있으면 그대로 재사용하므로, 탭을 닫기 전에는 추가 로그인 없이 업로드된다.
+ * 토큰이 만료되었거나 서버에서 401이 떨어지면 한 번만 재인증을 시도한다.
  */
 export async function uploadToDrive(
   files: DriveFileInput[]
 ): Promise<DriveUploadResult[]> {
   if (files.length === 0) return [];
-  const token = await getAccessToken();
-  try {
+
+  const run = async (forceNew: boolean) => {
+    const token = await getAccessToken(forceNew);
     const folderId = await ensureFolder(token, FOLDER_NAME);
     const results: DriveUploadResult[] = [];
     for (const f of files) {
       results.push(await uploadOne(token, f, folderId));
     }
     return results;
-  } finally {
-    revokeToken(token);
+  };
+
+  try {
+    return await run(false);
+  } catch (err) {
+    // 토큰 만료/권한 문제로 보이는 에러면 캐시 비우고 한 번만 재시도
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/\b(401|403)\b/.test(msg)) {
+      clearCachedToken();
+      return await run(true);
+    }
+    throw err;
   }
 }
