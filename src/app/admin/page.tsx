@@ -467,21 +467,46 @@ export default function AdminPage() {
                     <div
                       className="mt-2 flex items-center gap-2"
                       onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => { e.stopPropagation(); handleLongPressEnd(); }}
+                      onPointerMove={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchMove={(e) => e.stopPropagation()}
                     >
                       <span className="text-xs text-gray-500">기본 줌</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const v = Math.max(1, +(Math.round(((cover.defaultZoom ?? 1) - 0.1) * 10) / 10).toFixed(1));
+                          updateCover({ ...cover, defaultZoom: v });
+                        }}
+                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-base font-bold btn-touch"
+                      >−</button>
                       <input
                         type="range"
                         min={1}
                         max={5}
                         step={0.1}
                         value={cover.defaultZoom ?? 1}
-                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => { e.stopPropagation(); handleLongPressEnd(); }}
+                        onPointerMove={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value);
                           updateCover({ ...cover, defaultZoom: v });
                         }}
-                        className="flex-1 max-w-[160px] accent-primary"
+                        className="flex-1 max-w-[140px] accent-primary touch-none"
                       />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const v = Math.min(5, +(Math.round(((cover.defaultZoom ?? 1) + 0.1) * 10) / 10).toFixed(1));
+                          updateCover({ ...cover, defaultZoom: v });
+                        }}
+                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-base font-bold btn-touch"
+                      >+</button>
                       <span className="text-xs font-bold w-10 text-right">
                         {(cover.defaultZoom ?? 1).toFixed(1)}x
                       </span>
