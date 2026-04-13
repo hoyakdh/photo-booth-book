@@ -778,6 +778,20 @@ export default function AdminPage() {
                   </div>
                 </label>
 
+                {/* 꾸미기 버튼 노출 */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.showDecorate}
+                    onChange={(e) => updateKiosk({ showDecorate: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">꾸미기 버튼 표시</span>
+                    <p className="text-xs text-gray-400">결과 화면에서 스티커 꾸미기 버튼 노출 여부</p>
+                  </div>
+                </label>
+
                 <p className="text-xs text-gray-400 bg-purple-50 rounded-lg p-3">
                   키오스크 모드 활성화 시 메인화면에서 관리자 링크가 숨겨집니다.
                   관리자 페이지 접근: 로고를 5번 연속 탭하세요.

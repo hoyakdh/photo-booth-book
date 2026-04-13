@@ -1,12 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { usePhotoStore } from "@/store/usePhotoStore";
 import { useBookCover } from "@/hooks/useBookCovers";
 import StickerEditor from "@/components/StickerEditor";
 import { createGif } from "@/lib/gifEncoder";
 import { uploadToDrive } from "@/lib/drive";
+import { loadKioskConfig } from "@/lib/kiosk";
 
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,11 @@ export default function ResultPage() {
   const [driveError, setDriveError] = useState<string | null>(null);
   const [askGoHome, setAskGoHome] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
+  const [showDecorate, setShowDecorate] = useState(true);
+  useEffect(() => {
+    const k = loadKioskConfig();
+    setShowDecorate(!k.enabled || k.showDecorate);
+  }, []);
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
@@ -200,24 +206,10 @@ export default function ResultPage() {
       )}
 
       {/* 헤더 */}
-      <header className="flex items-center justify-between px-4 py-3 bg-white shadow-sm">
-        <button
-          onClick={handleRetake}
-          disabled={busy}
-          className="text-primary font-medium btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          &larr; 다시 촬영
-        </button>
+      <header className="flex items-center justify-center px-4 py-3 bg-white shadow-sm">
         <h1 className="font-bold text-lg">
           {cover?.name || "결과"}
         </h1>
-        <button
-          onClick={handleHome}
-          disabled={busy}
-          className="text-gray-400 text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          홈으로
-        </button>
       </header>
 
       {/* 선택된 사진 크게 보기 */}
@@ -297,13 +289,15 @@ export default function ResultPage() {
         >
           {localSaving ? "저장중..." : saved ? "저장 완료!" : "저장"}
         </button>
-        <button
-          onClick={() => setShowSticker(true)}
-          disabled={busy}
-          className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          꾸미기
-        </button>
+        {showDecorate && (
+          <button
+            onClick={() => setShowSticker(true)}
+            disabled={busy}
+            className="py-3 px-3 bg-pink-400 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            꾸미기
+          </button>
+        )}
         <button
           onClick={handleRetake}
           disabled={busy}

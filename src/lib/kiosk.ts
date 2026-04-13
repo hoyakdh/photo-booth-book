@@ -9,6 +9,7 @@ export interface KioskConfig {
   resultReturnSeconds: number;// 결과 화면 복귀 시간 (초)
   preventNavigation: boolean; // 뒤로가기/새로고침 방지
   wakeLock: boolean;          // 화면 꺼짐 방지
+  showDecorate: boolean;      // 결과 화면 꾸미기 버튼 노출
 }
 
 export const DEFAULT_KIOSK: KioskConfig = {
@@ -20,6 +21,7 @@ export const DEFAULT_KIOSK: KioskConfig = {
   resultReturnSeconds: 15,
   preventNavigation: true,
   wakeLock: true,
+  showDecorate: true,
 };
 
 export function loadKioskConfig(): KioskConfig {
