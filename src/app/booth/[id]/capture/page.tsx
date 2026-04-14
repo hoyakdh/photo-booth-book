@@ -635,6 +635,22 @@ export default function CapturePage() {
 
       {/* 하단 컨트롤 */}
       <div className="flex-shrink-0 flex flex-col items-center justify-end gap-2 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80 min-h-[160px]">
+        {/* 멀티컷 사전 안내: 첫 컷 시작 전에 1회 노출 */}
+        {isReady && totalCuts > 1 && currentCut === 0 && countdown === null && !capturing && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white text-sm">
+            <span>📸</span>
+            <span>촬영 버튼을 누르면 {totalCuts}컷이 자동으로 연속 촬영됩니다</span>
+          </div>
+        )}
+
+        {/* 멀티컷 진행 표시: 컷 사이 대기 구간 */}
+        {totalCuts > 1 && capturing && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 text-white text-sm">
+            <span>⏱</span>
+            <span>{currentCut + 1} / {totalCuts}컷 · 자동으로 다음 컷 촬영 중…</span>
+          </div>
+        )}
+
         {/* 자동 촬영 안내 */}
         {isReady && countdown === null && !capturing && (
           <div className="flex items-center gap-2">
