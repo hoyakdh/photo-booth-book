@@ -10,6 +10,7 @@ export interface KioskConfig {
   preventNavigation: boolean; // 뒤로가기/새로고침 방지
   wakeLock: boolean;          // 화면 꺼짐 방지
   showDecorate: boolean;      // 결과 화면 꾸미기 버튼 노출
+  showResultLoading: boolean; // 결과 화면 진입 시 제본 로딩 연출
 }
 
 export const DEFAULT_KIOSK: KioskConfig = {
@@ -22,6 +23,7 @@ export const DEFAULT_KIOSK: KioskConfig = {
   preventNavigation: true,
   wakeLock: true,
   showDecorate: true,
+  showResultLoading: true,
 };
 
 export function loadKioskConfig(): KioskConfig {

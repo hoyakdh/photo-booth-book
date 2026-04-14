@@ -5,6 +5,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { usePhotoStore } from "@/store/usePhotoStore";
 import { useBookCover } from "@/hooks/useBookCovers";
 import StickerEditor from "@/components/StickerEditor";
+import BindingLoader from "@/components/result/BindingLoader";
 import { createGif } from "@/lib/gifEncoder";
 import { uploadToDrive } from "@/lib/drive";
 import { loadKioskConfig } from "@/lib/kiosk";
@@ -27,15 +28,26 @@ export default function ResultPage() {
   const [sharing, setSharing] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [showDecorate, setShowDecorate] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
     const k = loadKioskConfig();
     setShowDecorate(!k.enabled || k.showDecorate);
-  }, []);
+    if (photos.length === 0) {
+      setIsLoading(false);
+      return;
+    }
+    if (k.enabled && k.showResultLoading === false) {
+      setIsLoading(false);
+      return;
+    }
+    const t = setTimeout(() => setIsLoading(false), 3000);
+    return () => clearTimeout(t);
+  }, [photos.length]);
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
   const selectedPhoto = photos[selectedIdx];
-  const busy = driveState === "uploading" || localSaving || gifCreating || printing || sharing;
+  const busy = driveState === "uploading" || localSaving || gifCreating || printing || sharing || isLoading;
 
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
@@ -285,6 +297,7 @@ export default function ResultPage() {
 
   return (
     <div className="h-screen-safe flex flex-col bg-gray-100">
+      {isLoading && <BindingLoader />}
       {/* 스티커 에디터 */}
       {showSticker && selectedPhoto && (
         <StickerEditor
