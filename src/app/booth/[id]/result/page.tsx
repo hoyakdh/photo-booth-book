@@ -24,6 +24,7 @@ export default function ResultPage() {
   const [driveError, setDriveError] = useState<string | null>(null);
   const [askGoHome, setAskGoHome] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [showDecorate, setShowDecorate] = useState(true);
   useEffect(() => {
     const k = loadKioskConfig();
@@ -33,7 +34,7 @@ export default function ResultPage() {
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
   const selectedPhoto = photos[selectedIdx];
-  const busy = driveState === "uploading" || localSaving || gifCreating;
+  const busy = driveState === "uploading" || localSaving || gifCreating || printing;
 
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
@@ -141,6 +142,80 @@ export default function ResultPage() {
       setDriveState("error");
     }
   }, [selectedPhoto, gifFrames]);
+
+  const handlePrint = useCallback(() => {
+    if (!selectedPhoto) return;
+    setPrinting(true);
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 500);
+      setPrinting(false);
+    };
+
+    const doc = iframe.contentDocument;
+    if (!doc) {
+      cleanup();
+      return;
+    }
+
+    doc.open();
+    doc.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>print</title>
+<style>
+  @page { margin: 0; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; }
+  .wrap { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+</style>
+</head>
+<body>
+  <div class="wrap"><img id="p" src="${selectedPhoto.imageData}" /></div>
+</body>
+</html>`);
+    doc.close();
+
+    const run = () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) {
+          cleanup();
+          return;
+        }
+        win.focus();
+        win.print();
+        setAskGoHome(true);
+      } catch (err) {
+        console.error("프린트 실패:", err);
+      } finally {
+        cleanup();
+      }
+    };
+
+    const img = doc.getElementById("p") as HTMLImageElement | null;
+    if (img && !img.complete) {
+      img.onload = run;
+      img.onerror = () => {
+        console.error("프린트 이미지 로드 실패");
+        cleanup();
+      };
+    } else {
+      run();
+    }
+  }, [selectedPhoto]);
 
   const handleRetake = () => {
     router.push(`/booth/${id}/capture`);
@@ -298,6 +373,13 @@ export default function ResultPage() {
             꾸미기
           </button>
         )}
+        <button
+          onClick={handlePrint}
+          disabled={busy || !selectedPhoto}
+          className="py-3 px-3 bg-purple-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {printing ? "프린트중..." : "프린트"}
+        </button>
         <button
           onClick={handleRetake}
           disabled={busy}
