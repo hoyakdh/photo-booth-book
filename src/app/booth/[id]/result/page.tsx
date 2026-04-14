@@ -24,6 +24,7 @@ export default function ResultPage() {
   const [driveError, setDriveError] = useState<string | null>(null);
   const [askGoHome, setAskGoHome] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [showDecorate, setShowDecorate] = useState(true);
   useEffect(() => {
@@ -34,7 +35,7 @@ export default function ResultPage() {
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
   const selectedPhoto = photos[selectedIdx];
-  const busy = driveState === "uploading" || localSaving || gifCreating || printing;
+  const busy = driveState === "uploading" || localSaving || gifCreating || printing || sharing;
 
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
@@ -98,6 +99,48 @@ export default function ResultPage() {
     setAskGoHome(true);
     } finally {
       setLocalSaving(false);
+    }
+  }, [selectedPhoto, gifFrames]);
+
+  const handleShare = useCallback(async () => {
+    if (!selectedPhoto) return;
+    if (typeof navigator === "undefined" || !navigator.share) {
+      alert("이 기기는 공유 기능을 지원하지 않습니다. '저장'을 이용해 주세요.");
+      return;
+    }
+    setSharing(true);
+    try {
+      const ts = Date.now();
+      const pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
+      const pngFile = new File([pngBlob], `photo-booth-${ts}.png`, { type: "image/png" });
+
+      const files: File[] = [pngFile];
+      if (gifFrames.length > 0) {
+        try {
+          setGifCreating(true);
+          const gifBlob = await createGif(gifFrames, 8, 10);
+          files.push(new File([gifBlob], `photo-booth-${ts}.gif`, { type: "image/gif" }));
+        } catch (e) {
+          console.error("GIF 생성 실패:", e);
+        } finally {
+          setGifCreating(false);
+        }
+      }
+
+      const shareData: ShareData = { files, title: "포토부스 결과", text: "나만의 포토북 📸" };
+      if (navigator.canShare && !navigator.canShare(shareData)) {
+        await navigator.share({ title: shareData.title, text: shareData.text });
+      } else {
+        await navigator.share(shareData);
+      }
+      setSaved(true);
+    } catch (err) {
+      if ((err as DOMException)?.name !== "AbortError") {
+        console.error("공유 실패:", err);
+        alert("공유에 실패했습니다.");
+      }
+    } finally {
+      setSharing(false);
     }
   }, [selectedPhoto, gifFrames]);
 
@@ -363,6 +406,13 @@ export default function ResultPage() {
           }`}
         >
           {localSaving ? "저장중..." : saved ? "저장 완료!" : "저장"}
+        </button>
+        <button
+          onClick={handleShare}
+          disabled={busy || !selectedPhoto}
+          className="py-3 px-3 bg-teal-500 text-white rounded-2xl font-bold text-sm btn-touch disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sharing ? "공유중..." : "공유"}
         </button>
         {showDecorate && (
           <button
