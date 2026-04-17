@@ -39,14 +39,6 @@ export default function BoothStartPage() {
 
   return (
     <div className="h-screen-safe relative flex flex-col">
-      {/* 뒤로가기 */}
-      <button
-        onClick={() => router.push("/")}
-        className="absolute top-4 left-4 z-10 w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white text-xl btn-touch"
-      >
-        &larr;
-      </button>
-
       {/* 책표지 꽉 찬 화면 */}
       <div className="flex-1 relative overflow-hidden">
         <img
@@ -56,14 +48,21 @@ export default function BoothStartPage() {
         />
       </div>
 
-      {/* START 버튼 */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 flex justify-center">
+      {/* 하단 컨트롤 */}
+      <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-between">
+        <button
+          onClick={() => router.push("/")}
+          className="w-12 h-12 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white text-xl btn-touch"
+        >
+          &larr;
+        </button>
         <button
           onClick={handleStart}
           className="px-12 py-5 bg-primary/70 text-white rounded-full font-black text-2xl shadow-2xl hover:bg-primary-light active:scale-95 transition-all btn-touch"
         >
           START
         </button>
+        <div className="w-12 h-12" />
       </div>
     </div>
   );
