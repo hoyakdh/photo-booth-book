@@ -306,7 +306,7 @@ export default function AdminPage() {
           <button
             onClick={() => {
               if (confirm("샘플 파일 다운로드후 백업 가져오기에 불러오면 됩니다.")) {
-                window.open("https://drive.usercontent.google.com/download?id=13hRpwNVP0BnQJyKJANuxCF6hVUMXl8eJ&export=download&confirm=t", "_blank");
+                window.open("https://drive.usercontent.google.com/download?id=1QkZcxvDCM1hvkbkJKfNhxy0fgGiOERxE&export=download&confirm=t", "_blank");
               }
             }}
             className="px-4 py-2 bg-gray-600 text-white rounded-xl text-sm font-bold btn-touch text-center"
