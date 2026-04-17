@@ -15,6 +15,8 @@ export default function AdminPage() {
   const { covers, loading, addCover, removeCover, updateCover, reorderCovers } = useBookCovers();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [maskData, setMaskData] = useState<string | null>(null);
@@ -120,6 +122,26 @@ export default function AdminPage() {
     if (confirm("정말 삭제할까요?")) {
       await removeCover(id);
     }
+  };
+
+  const handleEditStart = (cover: BookCover) => {
+    setEditingId(cover.id);
+    setEditingName(cover.name);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditingName("");
+  };
+
+  const handleEditSave = async (cover: BookCover) => {
+    const trimmed = editingName.trim();
+    if (!trimmed || trimmed === cover.name) {
+      handleEditCancel();
+      return;
+    }
+    await updateCover({ ...cover, name: trimmed });
+    handleEditCancel();
   };
 
   const toggleSelect = (id: string) => {
@@ -501,7 +523,29 @@ export default function AdminPage() {
                   className="w-20 h-28 object-cover rounded-lg flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-lg truncate">{cover.name}</p>
+                  {editingId === cover.id ? (
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => { e.stopPropagation(); handleLongPressEnd(); }}
+                      onPointerMove={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleEditSave(cover);
+                          else if (e.key === "Escape") handleEditCancel();
+                        }}
+                        autoFocus
+                        className="flex-1 min-w-0 px-2 py-1 border-2 border-primary rounded-lg text-base font-bold focus:outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <p className="font-bold text-lg truncate">{cover.name}</p>
+                  )}
                   <p className="text-xs text-gray-400">
                     {new Date(cover.createdAt).toLocaleDateString("ko-KR")}
                   </p>
@@ -551,12 +595,37 @@ export default function AdminPage() {
                 </div>
                 {!selectMode && (
                   <div className="flex flex-col gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(cover.id); }}
-                      className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"
-                    >
-                      삭제
-                    </button>
+                    {editingId === cover.id ? (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditSave(cover); }}
+                          className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium btn-touch"
+                        >
+                          저장
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditCancel(); }}
+                          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium btn-touch"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditStart(cover); }}
+                          className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-sm font-medium btn-touch"
+                        >
+                          수정
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(cover.id); }}
+                          className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"
+                        >
+                          삭제
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
