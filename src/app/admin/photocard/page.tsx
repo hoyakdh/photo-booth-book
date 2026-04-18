@@ -1,0 +1,312 @@
+"use client";
+
+import { useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { fileToDataURL, resizeImage } from "@/lib/utils";
+
+const SLOT_COUNT = 9;
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export default function PhotocardPrintPage() {
+  const router = useRouter();
+  const [slots, setSlots] = useState<(string | null)[]>(() =>
+    Array.from({ length: SLOT_COUNT }, () => null)
+  );
+  const [printing, setPrinting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const slotIndexRef = useRef<number | null>(null);
+
+  const openFileForSlot = (index: number) => {
+    slotIndexRef.current = index;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const idx = slotIndexRef.current;
+    if (!file || idx === null) {
+      e.target.value = "";
+      slotIndexRef.current = null;
+      return;
+    }
+    try {
+      const dataURL = await fileToDataURL(file);
+      const resized = await resizeImage(dataURL);
+      setSlots((prev) => {
+        const next = [...prev];
+        next[idx] = resized;
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      alert("이미지를 불러오지 못했습니다.");
+    } finally {
+      e.target.value = "";
+      slotIndexRef.current = null;
+    }
+  };
+
+  const clearSlot = useCallback((index: number) => {
+    setSlots((prev) => {
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+  }, []);
+
+  const fillAllFromFirst = () => {
+    const first = slots[0];
+    if (!first) {
+      alert("1번 슬롯에 이미지를 먼저 넣어주세요.");
+      return;
+    }
+    setSlots(Array.from({ length: SLOT_COUNT }, () => first));
+  };
+
+  const handlePrint = useCallback(() => {
+    setPrinting(true);
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 500);
+      setPrinting(false);
+    };
+
+    const cellsHtml = slots
+      .map((src) =>
+        src
+          ? `<div class="card"><img src="${escapeHtmlAttr(src)}" alt="" /></div>`
+          : `<div class="card card--empty"></div>`
+      )
+      .join("");
+
+    const doc = iframe.contentDocument;
+    if (!doc) {
+      cleanup();
+      return;
+    }
+
+    doc.open();
+    doc.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>포토카드 인쇄</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .page {
+    width: 21cm;
+    height: 29.7cm;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 5.5cm);
+    grid-template-rows: repeat(3, 8.45cm);
+    gap: 0.3cm;
+  }
+  .card {
+    width: 5.5cm;
+    height: 8.45cm;
+    overflow: hidden;
+    background: #fff;
+    box-sizing: border-box;
+  }
+  .card--empty { background: #fff; }
+  .card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="grid">${cellsHtml}</div>
+  </div>
+</body>
+</html>`);
+    doc.close();
+
+    const run = () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) {
+          cleanup();
+          return;
+        }
+        win.focus();
+        win.print();
+      } catch (err) {
+        console.error("프린트 실패:", err);
+        alert("인쇄를 시작하지 못했습니다.");
+      } finally {
+        cleanup();
+      }
+    };
+
+    const imgs = doc.querySelectorAll("img");
+    let pending = 0;
+    imgs.forEach((img) => {
+      if (!img.complete) {
+        pending++;
+        img.onload = img.onerror = check;
+      }
+    });
+    function check() {
+      pending--;
+      if (pending <= 0) run();
+    }
+    if (pending === 0) run();
+  }, [slots]);
+
+  return (
+    <div className="min-h-[100dvh] p-4 max-w-3xl mx-auto pb-24">
+      <header className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.push("/admin")}
+            className="px-3 py-2 bg-gray-200 rounded-xl text-sm font-medium btn-touch"
+          >
+            ← 관리자
+          </button>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+            포토카드 인쇄
+          </h1>
+        </div>
+      </header>
+
+      <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-6 text-sm text-amber-900 space-y-2">
+        <p className="font-bold">인쇄 안내</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>용지: <strong>A4</strong>, 방향: <strong>세로(Portrait)</strong></li>
+          <li>브라우저 인쇄 설정에서 <strong>여백 없음</strong>(또는 최소)을 선택하면 실제 치수에 가깝게 출력됩니다.</li>
+          <li>카드 한 장 크기: 가로 5.5cm × 세로 8.45cm, 한 페이지에 9장(3×3) 배치됩니다.</li>
+        </ul>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          type="button"
+          onClick={fillAllFromFirst}
+          className="px-4 py-3 bg-gray-700 text-white rounded-xl text-sm font-bold btn-touch"
+        >
+          전체 같은 이미지로 채우기 (1번 기준)
+        </button>
+        <button
+          type="button"
+          onClick={handlePrint}
+          disabled={printing}
+          className="px-4 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50"
+        >
+          {printing ? "인쇄 준비중…" : "인쇄"}
+        </button>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      <p className="text-sm text-gray-600 mb-3">
+        아래 칸을 눌러 이미지를 넣거나 바꿀 수 있습니다. 우측 상단 ×로 비울 수 있습니다.
+      </p>
+
+      <div className="flex justify-center overflow-x-auto py-2">
+        <div
+          className="bg-white shadow-xl border border-gray-200 rounded-sm"
+          style={{
+            transform: "scale(0.55)",
+            transformOrigin: "top center",
+            marginBottom: "-12rem",
+          }}
+        >
+          <div
+            className="flex items-center justify-center bg-white"
+            style={{ width: "21cm", height: "29.7cm" }}
+          >
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(3, 5.5cm)",
+                gridTemplateRows: "repeat(3, 8.45cm)",
+                gap: "0.3cm",
+              }}
+            >
+              {slots.map((src, i) => (
+                <div
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openFileForSlot(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openFileForSlot(i);
+                    }
+                  }}
+                  className="relative w-[5.5cm] h-[8.45cm] overflow-hidden bg-gray-50 text-left cursor-pointer border border-gray-300 border-dashed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
+                >
+                  {src ? (
+                    <>
+                      <img
+                        src={src}
+                        alt={`슬롯 ${i + 1}`}
+                        className="w-full h-full object-cover block pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearSlot(i);
+                        }}
+                        className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/65 text-white text-lg font-bold leading-7 text-center hover:bg-black/80 z-10"
+                        aria-label={`슬롯 ${i + 1} 비우기`}
+                      >
+                        ×
+                      </button>
+                      <span className="absolute bottom-1 left-1 bg-black/55 text-white text-xs px-1.5 py-0.5 rounded pointer-events-none">
+                        {i + 1}
+                      </span>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-1 pointer-events-none">
+                      <span className="text-3xl font-light">+</span>
+                      <span className="text-xs font-medium">{i + 1}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

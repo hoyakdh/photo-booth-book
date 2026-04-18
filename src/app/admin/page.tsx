@@ -295,16 +295,26 @@ export default function AdminPage() {
       )}
 
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <h1 className="text-2xl font-bold text-foreground">
           관리자 - 책표지 관리
         </h1>
-        <button
-          onClick={() => router.push("/")}
-          className="px-4 py-2 bg-gray-200 rounded-xl text-sm font-medium btn-touch"
-        >
-          홈으로
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push("/admin/photocard")}
+            className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium btn-touch"
+          >
+            포토카드 인쇄
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="px-4 py-2 bg-gray-200 rounded-xl text-sm font-medium btn-touch"
+          >
+            홈으로
+          </button>
+        </div>
       </div>
 
       {/* 안내 문구 */}
