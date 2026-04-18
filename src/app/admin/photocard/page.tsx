@@ -19,37 +19,79 @@ export default function PhotocardPrintPage() {
     Array.from({ length: SLOT_COUNT }, () => null)
   );
   const [printing, setPrinting] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  // single: 특정 슬롯 교체 / multi: 빈 슬롯부터 순서대로 채우기
+  const fileModeRef = useRef<"single" | "multi">("single");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
   const slotIndexRef = useRef<number | null>(null);
 
   const openFileForSlot = (index: number) => {
     slotIndexRef.current = index;
+    fileModeRef.current = "single";
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const idx = slotIndexRef.current;
-    if (!file || idx === null) {
-      e.target.value = "";
-      slotIndexRef.current = null;
-      return;
-    }
+  const openMultiFile = () => {
+    fileModeRef.current = "multi";
+    multiFileInputRef.current?.click();
+  };
+
+  const processFiles = async (
+    files: File[],
+    mode: "single" | "multi",
+    startIdx: number | null
+  ) => {
+    setLoadingSlots(true);
     try {
-      const dataURL = await fileToDataURL(file);
-      const resized = await resizeImage(dataURL);
+      const results = await Promise.all(
+        files.map(async (file) => {
+          const dataURL = await fileToDataURL(file);
+          return resizeImage(dataURL);
+        })
+      );
+
       setSlots((prev) => {
         const next = [...prev];
-        next[idx] = resized;
+        if (mode === "single" && startIdx !== null) {
+          next[startIdx] = results[0];
+        } else {
+          // 빈 슬롯 인덱스 목록
+          const emptyIndices = next
+            .map((v, i) => (v === null ? i : -1))
+            .filter((i) => i !== -1);
+          results.forEach((img, ri) => {
+            if (ri < emptyIndices.length) {
+              next[emptyIndices[ri]] = img;
+            }
+          });
+        }
         return next;
       });
     } catch (err) {
       console.error(err);
       alert("이미지를 불러오지 못했습니다.");
     } finally {
-      e.target.value = "";
-      slotIndexRef.current = null;
+      setLoadingSlots(false);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const idx = slotIndexRef.current;
+    e.target.value = "";
+    slotIndexRef.current = null;
+    if (files.length === 0 || idx === null) return;
+    await processFiles(files, "single", idx);
+  };
+
+  const handleMultiFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    await processFiles(files, "multi", null);
   };
 
   const clearSlot = useCallback((index: number) => {
@@ -208,24 +250,34 @@ export default function PhotocardPrintPage() {
         </ul>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          type="button"
+          onClick={openMultiFile}
+          disabled={loadingSlots}
+          className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50"
+        >
+          {loadingSlots ? "불러오는 중…" : "여러 이미지 한번에 넣기"}
+        </button>
         <button
           type="button"
           onClick={fillAllFromFirst}
-          className="px-4 py-3 bg-gray-700 text-white rounded-xl text-sm font-bold btn-touch"
+          disabled={loadingSlots}
+          className="px-4 py-3 bg-gray-700 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50"
         >
           전체 같은 이미지로 채우기 (1번 기준)
         </button>
         <button
           type="button"
           onClick={handlePrint}
-          disabled={printing}
+          disabled={printing || loadingSlots}
           className="px-4 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50"
         >
           {printing ? "인쇄 준비중…" : "인쇄"}
         </button>
       </div>
 
+      {/* 단일 슬롯 교체용 */}
       <input
         ref={fileInputRef}
         type="file"
@@ -233,9 +285,18 @@ export default function PhotocardPrintPage() {
         className="hidden"
         onChange={handleFileChange}
       />
+      {/* 다중 선택 → 빈 슬롯 채우기용 */}
+      <input
+        ref={multiFileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleMultiFileChange}
+      />
 
       <p className="text-sm text-gray-600 mb-3">
-        아래 칸을 눌러 이미지를 넣거나 바꿀 수 있습니다. 우측 상단 ×로 비울 수 있습니다.
+        각 칸을 눌러 이미지를 개별로 넣거나 바꿀 수 있습니다. 우측 상단 ×로 비울 수 있습니다.
       </p>
 
       <div className="flex justify-center overflow-x-auto py-2">
