@@ -319,6 +319,11 @@ function PhotocardPrintInner() {
             배치됩니다.
           </li>
         </ul>
+        <p className="text-amber-800 border-t border-amber-300 pt-2 mt-1">
+          ⚠️ <strong>주의:</strong> 인쇄 기록은 이 기기의 브라우저 로컬 저장소에만
+          보관됩니다. 브라우저 데이터(캐시·사이트 데이터)를 삭제하거나 다른
+          기기·브라우저에서 접속하면 기록이 사라질 수 있습니다.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
