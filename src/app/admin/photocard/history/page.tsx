@@ -13,11 +13,32 @@ function formatDate(ms: number): string {
   });
 }
 
-function firstThumbnail(slots: (string | null)[]): string | null {
-  for (const s of slots) {
-    if (s) return s;
-  }
-  return null;
+function A4Preview({ slots }: { slots: (string | null)[] }) {
+  const cells = Array.from({ length: 9 }, (_, i) => slots[i] ?? null);
+  return (
+    <div
+      className="absolute inset-0 bg-white"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateRows: "repeat(3, 1fr)",
+        gap: "2px",
+        padding: "6px",
+      }}
+    >
+      {cells.map((src, i) => (
+        <div key={i} className="overflow-hidden bg-gray-100">
+          {src ? (
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover block"
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function PhotocardPrintHistoryPage() {
@@ -111,24 +132,13 @@ export default function PhotocardPrintHistoryPage() {
       {!loading && jobs.length > 0 && (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => {
-            const thumb = firstThumbnail(job.slots);
             return (
               <li
                 key={job.id}
                 className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col"
               >
-                <div className="aspect-[5.5/8.45] bg-gray-100 relative">
-                  {thumb ? (
-                    <img
-                      src={thumb}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                      빈 슬롯만 있음
-                    </div>
-                  )}
+                <div className="aspect-[21/29.7] bg-white relative overflow-hidden border-b border-gray-100">
+                  <A4Preview slots={job.slots} />
                 </div>
                 <div className="p-3 flex flex-col gap-2 flex-1">
                   <p className="text-xs text-gray-500">
