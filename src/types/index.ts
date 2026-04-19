@@ -15,3 +15,10 @@ export interface CapturedPhoto {
   imageData: string; // Base64 PNG data URL
   capturedAt: number;
 }
+
+/** 포토카드 인쇄 한 번에 대한 기록 (9슬롯 data URL) */
+export interface PrintJob {
+  id: string;
+  slots: (string | null)[];
+  printedAt: number;
+}

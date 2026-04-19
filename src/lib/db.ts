@@ -1,8 +1,9 @@
-import { BookCover } from "@/types";
+import { BookCover, PrintJob } from "@/types";
 
 const DB_NAME = "photo-booth-book";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "bookCovers";
+const PRINT_HISTORY_STORE = "printHistory";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -12,6 +13,9 @@ function openDB(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(PRINT_HISTORY_STORE)) {
+        db.createObjectStore(PRINT_HISTORY_STORE, { keyPath: "id" });
       }
     };
 
@@ -62,6 +66,54 @@ export async function deleteBookCover(id: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function savePrintJob(job: PrintJob): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRINT_HISTORY_STORE, "readwrite");
+    const store = tx.objectStore(PRINT_HISTORY_STORE);
+    store.put(job);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getPrintJob(id: string): Promise<PrintJob | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRINT_HISTORY_STORE, "readonly");
+    const store = tx.objectStore(PRINT_HISTORY_STORE);
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result as PrintJob | undefined);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getAllPrintJobs(): Promise<PrintJob[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRINT_HISTORY_STORE, "readonly");
+    const store = tx.objectStore(PRINT_HISTORY_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const jobs = request.result as PrintJob[];
+      jobs.sort((a, b) => b.printedAt - a.printedAt);
+      resolve(jobs);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function deletePrintJob(id: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRINT_HISTORY_STORE, "readwrite");
+    const store = tx.objectStore(PRINT_HISTORY_STORE);
     store.delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
