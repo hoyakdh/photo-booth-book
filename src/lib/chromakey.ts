@@ -462,18 +462,16 @@ export function drawCameraFullScreen(
     );
     ctx.restore();
   } else {
-    // 일반: 마스크 bounds 비율(= 최종 합성에서 카메라가 채우는 비율)로 크롭 → 전체 화면
-    const mw = maskBounds.w;
-    const mh = maskBounds.h;
-    const boundsAspect = mw / mh;
+    // 일반: 화면 비율로 카메라를 크롭 → 전체 화면에 꽉 채움 (왜곡 없음)
+    const screenAspect = width / height;
     const camAspect = camW / camH;
     let srcW: number, srcH: number;
-    if (camAspect > boundsAspect) {
+    if (camAspect > screenAspect) {
       srcH = camH;
-      srcW = camH * boundsAspect;
+      srcW = camH * screenAspect;
     } else {
       srcW = camW;
-      srcH = camW / boundsAspect;
+      srcH = camW / screenAspect;
     }
     srcW /= zoom;
     srcH /= zoom;
