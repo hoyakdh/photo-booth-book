@@ -5,6 +5,53 @@
  * - 컬러 필터로 자연스러운 톤 매칭
  */
 
+// 커버 이미지 픽셀 데이터 캐시 (drawImage + getImageData 반복 방지)
+const coverPixelsCache = new WeakMap<
+  HTMLImageElement | HTMLCanvasElement,
+  { w: number; h: number; data: Uint8ClampedArray }
+>();
+
+function getCachedCoverPixels(
+  coverImage: HTMLImageElement | HTMLCanvasElement,
+  width: number,
+  height: number
+): Uint8ClampedArray {
+  const cached = coverPixelsCache.get(coverImage);
+  if (cached && cached.w === width && cached.h === height) {
+    // blendWithFeatheredMask가 픽셀을 직접 수정하므로 매번 복사
+    return new Uint8ClampedArray(cached.data);
+  }
+  const off = new OffscreenCanvas(width, height);
+  const offCtx = off.getContext("2d")!;
+  offCtx.drawImage(coverImage, 0, 0, width, height);
+  const imageData = offCtx.getImageData(0, 0, width, height);
+  coverPixelsCache.set(coverImage, {
+    w: width,
+    h: height,
+    data: new Uint8ClampedArray(imageData.data),
+  });
+  return imageData.data;
+}
+
+// 카메라 프레임용 OffscreenCanvas 재사용 (매 프레임 생성 방지)
+let sharedCameraCanvas: OffscreenCanvas | null = null;
+let sharedCameraCtx: OffscreenCanvasRenderingContext2D | null = null;
+
+function getSharedCameraCanvas(
+  width: number,
+  height: number
+): OffscreenCanvasRenderingContext2D {
+  if (
+    !sharedCameraCanvas ||
+    sharedCameraCanvas.width !== width ||
+    sharedCameraCanvas.height !== height
+  ) {
+    sharedCameraCanvas = new OffscreenCanvas(width, height);
+    sharedCameraCtx = sharedCameraCanvas.getContext("2d")!;
+  }
+  return sharedCameraCtx!;
+}
+
 export interface CameraTransform {
   zoom: number;
   offsetX: number;
@@ -342,11 +389,9 @@ function compositeMaskOffscreen(
   bounds: MaskBounds,
   featheredMask?: ImageData
 ): void {
-  // 책표지
-  const offCover = new OffscreenCanvas(width, height);
-  const offCoverCtx = offCover.getContext("2d")!;
-  offCoverCtx.drawImage(coverImage, 0, 0, width, height);
-  const coverData = offCoverCtx.getImageData(0, 0, width, height);
+  // 책표지: 캐시된 픽셀 재사용 (매 프레임 drawImage+getImageData 방지)
+  const coverPixels = getCachedCoverPixels(coverImage, width, height);
+  const coverData = new ImageData(coverPixels, width, height);
 
   // 페더링된 마스크 또는 일반 마스크
   let maskData: ImageData;
@@ -359,9 +404,8 @@ function compositeMaskOffscreen(
     maskData = offMaskCtx.getImageData(0, 0, width, height);
   }
 
-  // 카메라
-  const offCamera = new OffscreenCanvas(width, height);
-  const offCameraCtx = offCamera.getContext("2d")!;
+  // 카메라: 공유 OffscreenCanvas 재사용 (매 프레임 생성 방지)
+  const offCameraCtx = getSharedCameraCanvas(width, height);
   drawCameraToMaskArea(offCameraCtx, cameraFrame, width, height, bounds, transform);
   const cameraData = offCameraCtx.getImageData(0, 0, width, height);
 

@@ -212,7 +212,9 @@ export default function CapturePage() {
         let w: number, h: number;
         if (cW / cH < aspect) { w = cW; h = cW / aspect; } else { h = cH; w = cH * aspect; }
 
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // 히든 캔버스는 DPR=1로 고정 — 화면에 표시 안 되므로 고해상도 불필요
+        // DPR=2 대비 처리 픽셀 수 1/4로 감소
+        const dpr = 1;
         const canvasW = Math.round(w * dpr);
         const canvasH = Math.round(h * dpr);
         const sizeChanged = canvas.width !== canvasW || canvas.height !== canvasH;
@@ -257,28 +259,7 @@ export default function CapturePage() {
           setupCurrentCut(currentCutRef.current);
         }
 
-        // 배경: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
-        const bgImage = (compositeCanvasRef.current && totalCutsRef.current > 1)
-          ? compositeCanvasRef.current
-          : coverImg;
-
-        // 마스크: 멀티컷이면 현재 컷 전용, 1컷이면 원본
-        const maskToUse = currentMaskCanvasRef.current || maskImg;
-
-        compositeMask(
-          ctx, bgImage, maskToUse, video, canvas.width, canvas.height,
-          transformRef.current,
-          currentBoundsRef.current!,
-          currentFeatheredRef.current!
-        );
-
-        // GIF용 프레임 캡처
-        frameCountRef.current++;
-        if (frameCountRef.current % 3 === 0 && frameBufferRef.current) {
-          frameBufferRef.current.capture(canvas);
-        }
-
-        // 미리보기 캔버스: 커버 이미지 비율(contain)로 렌더링 — 레터박스 허용
+        // ── 미리보기 캔버스: 매 프레임 렌더링 (drawImage만 — 저비용) ──
         const previewCanvas = previewCanvasRef.current;
         if (
           previewCanvas &&
@@ -314,6 +295,30 @@ export default function CapturePage() {
           drawCameraFullScreen(pCtx, video, pw, ph, currentBoundsRef.current, transformRef.current);
         }
 
+        // ── 크로마키 합성 + GIF 캡처: 4프레임마다 (~15fps) ──
+        // getImageData/putImageData + 픽셀 연산이 무거우므로 쓰로틀링
+        frameCountRef.current++;
+        if (frameCountRef.current % 4 === 0) {
+          // 배경: 멀티컷이면 합성 캔버스(이전 컷 누적), 1컷이면 원본 표지
+          const bgImage = (compositeCanvasRef.current && totalCutsRef.current > 1)
+            ? compositeCanvasRef.current
+            : coverImg;
+
+          // 마스크: 멀티컷이면 현재 컷 전용, 1컷이면 원본
+          const maskToUse = currentMaskCanvasRef.current || maskImg;
+
+          compositeMask(
+            ctx, bgImage, maskToUse, video, canvas.width, canvas.height,
+            transformRef.current,
+            currentBoundsRef.current!,
+            currentFeatheredRef.current!
+          );
+
+          // GIF용 프레임 캡처
+          if (frameBufferRef.current) {
+            frameBufferRef.current.capture(canvas);
+          }
+        }
       }
       animFrameRef.current = requestAnimationFrame(render);
     };
