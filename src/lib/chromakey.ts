@@ -8,29 +8,26 @@
 // 커버 이미지 픽셀 데이터 캐시 (drawImage + getImageData 반복 방지)
 const coverPixelsCache = new WeakMap<
   HTMLImageElement | HTMLCanvasElement,
-  { w: number; h: number; data: Uint8ClampedArray }
+  { w: number; h: number; data: Uint8ClampedArray<ArrayBuffer> }
 >();
 
 function getCachedCoverPixels(
   coverImage: HTMLImageElement | HTMLCanvasElement,
   width: number,
   height: number
-): Uint8ClampedArray {
+): Uint8ClampedArray<ArrayBuffer> {
   const cached = coverPixelsCache.get(coverImage);
   if (cached && cached.w === width && cached.h === height) {
     // blendWithFeatheredMask가 픽셀을 직접 수정하므로 매번 복사
-    return new Uint8ClampedArray(cached.data);
+    return new Uint8ClampedArray(cached.data.buffer.slice(0)) as Uint8ClampedArray<ArrayBuffer>;
   }
   const off = new OffscreenCanvas(width, height);
   const offCtx = off.getContext("2d")!;
   offCtx.drawImage(coverImage, 0, 0, width, height);
   const imageData = offCtx.getImageData(0, 0, width, height);
-  coverPixelsCache.set(coverImage, {
-    w: width,
-    h: height,
-    data: new Uint8ClampedArray(imageData.data),
-  });
-  return imageData.data;
+  const pixels = new Uint8ClampedArray(imageData.data.buffer.slice(0)) as Uint8ClampedArray<ArrayBuffer>;
+  coverPixelsCache.set(coverImage, { w: width, h: height, data: pixels });
+  return new Uint8ClampedArray(pixels.buffer.slice(0)) as Uint8ClampedArray<ArrayBuffer>;
 }
 
 // 카메라 프레임용 OffscreenCanvas 재사용 (매 프레임 생성 방지)
