@@ -221,10 +221,10 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
       ctx.textBaseline = "middle";
 
       if (!isEmoji) {
-        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
         ctx.lineWidth = Math.max(2, fontSize / 8);
         ctx.strokeText(sticker.content, 0, 0);
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#000000";
       }
       ctx.fillText(sticker.content, 0, 0);
       ctx.restore();
@@ -276,6 +276,8 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
           {/* 스티커들 */}
           {stickers.map((sticker) => {
             const isActive = activeId === sticker.id;
+            const isStickerEmoji =
+              sticker.content.length <= 2 || /\p{Emoji}/u.test(sticker.content.slice(0, 2));
             return (
               <div
                 key={sticker.id}
@@ -286,8 +288,10 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
                   transform: `translate(-50%, -50%) scale(${sticker.scale}) rotate(${sticker.rotation}deg)`,
                   fontSize: sticker.content.length <= 2 ? "2.5rem" : "1.2rem",
                   fontWeight: "bold",
-                  color: "white",
-                  textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                  color: isStickerEmoji ? undefined : "#000000",
+                  textShadow: isStickerEmoji
+                    ? "0 2px 4px rgba(0,0,0,0.5)"
+                    : "0 0 2px rgba(255,255,255,0.95), 0 1px 3px rgba(255,255,255,0.85)",
                   zIndex: isActive ? 50 : 10,
                 }}
                 onPointerDown={(e) => handlePointerDown(e, sticker.id)}
@@ -345,7 +349,7 @@ export default function StickerEditor({ imageData, onSave, onCancel }: StickerEd
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="텍스트 입력"
-              className="flex-1 px-3 py-2 rounded-lg text-sm bg-gray-700 text-white focus:outline-none"
+              className="flex-1 px-3 py-2 rounded-lg text-sm bg-white text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
               autoFocus
             />
             <button onClick={addText} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold">추가</button>
