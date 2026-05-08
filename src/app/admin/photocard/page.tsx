@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  Suspense,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { fileToDataURL, resizeImage } from "@/lib/utils";
@@ -138,6 +145,12 @@ function PhotocardPrintInner() {
       next[index] = null;
       return next;
     });
+  }, []);
+
+  const hasFilledSlot = useMemo(() => slots.some((s) => s != null), [slots]);
+
+  const clearAllSlots = useCallback(() => {
+    setSlots(Array.from({ length: SLOT_COUNT }, () => null));
   }, []);
 
   const fillAllFromFirst = () => {
@@ -351,6 +364,16 @@ function PhotocardPrintInner() {
         >
           {printing ? "인쇄 준비중…" : "인쇄"}
         </button>
+        <button
+          type="button"
+          onClick={clearAllSlots}
+          disabled={
+            !hasFilledSlot || loadingSlots || loadingJob || printing
+          }
+          className="px-4 py-3 bg-red-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50 hover:bg-red-700"
+        >
+          전체 초기화
+        </button>
       </div>
 
       {/* 단일 슬롯 교체용 */}
@@ -424,7 +447,7 @@ function PhotocardPrintInner() {
                           e.stopPropagation();
                           clearSlot(i);
                         }}
-                        className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/65 text-white text-lg font-bold leading-7 text-center hover:bg-black/80 z-10"
+                        className="absolute top-1.5 right-1.5 z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/70 text-xl font-bold text-white ring-1 ring-white/60 transition-all hover:scale-110 hover:bg-red-600"
                         aria-label={`슬롯 ${i + 1} 비우기`}
                       >
                         ×
