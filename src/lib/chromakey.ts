@@ -409,6 +409,83 @@ function compositeMaskFallback(
 }
 
 /**
+ * 촬영 미리보기용: 마스크 영역 비율로 카메라를 전체 화면에 렌더링
+ * - zoom >= 1 (cover): 마스크 bounds 비율로 소스 크롭 → 전체 화면에 꽉 채움
+ * - zoom < 1 (group/줌아웃): 전체 카메라 프레임 contain + 블러 배경
+ * mirror(scaleX -1)는 호출 쪽 CSS로 처리
+ */
+export function drawCameraFullScreen(
+  ctx: CanvasRenderingContext2D,
+  cameraFrame: HTMLVideoElement,
+  width: number,
+  height: number,
+  maskBounds: MaskBounds,
+  transform: CameraTransform
+): void {
+  const { zoom, offsetX, offsetY } = transform;
+  const camW = cameraFrame.videoWidth;
+  const camH = cameraFrame.videoHeight;
+  if (!camW || !camH) return;
+
+  ctx.clearRect(0, 0, width, height);
+
+  if (zoom < 1) {
+    // 줌아웃(단체): 블러 배경 + contain
+    ctx.save();
+    ctx.filter = "blur(14px)";
+    const coverScale = Math.max(width / camW, height / camH);
+    ctx.drawImage(
+      cameraFrame,
+      -(camW * coverScale - width) / 2,
+      -(camH * coverScale - height) / 2,
+      camW * coverScale,
+      camH * coverScale
+    );
+    ctx.filter = "none";
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
+    const scaleFit = Math.min(width / camW, height / camH);
+    const dw = Math.max(1e-6, camW * scaleFit * zoom);
+    const dh = Math.max(1e-6, camH * scaleFit * zoom);
+    const maxPanX = Math.max(0, (dw - width) / 2);
+    const maxPanY = Math.max(0, (dh - height) / 2);
+    ctx.drawImage(
+      cameraFrame,
+      0, 0, camW, camH,
+      (width - dw) / 2 + offsetX * maxPanX,
+      (height - dh) / 2 + offsetY * maxPanY,
+      dw, dh
+    );
+    ctx.restore();
+  } else {
+    // 일반: 마스크 bounds 비율(= 최종 합성에서 카메라가 채우는 비율)로 크롭 → 전체 화면
+    const mw = maskBounds.w;
+    const mh = maskBounds.h;
+    const boundsAspect = mw / mh;
+    const camAspect = camW / camH;
+    let srcW: number, srcH: number;
+    if (camAspect > boundsAspect) {
+      srcH = camH;
+      srcW = camH * boundsAspect;
+    } else {
+      srcW = camW;
+      srcH = camW / boundsAspect;
+    }
+    srcW /= zoom;
+    srcH /= zoom;
+    const maxOffX = (camW - srcW) / 2;
+    const maxOffY = (camH - srcH) / 2;
+    const srcX = (camW - srcW) / 2 + offsetX * maxOffX;
+    const srcY = (camH - srcH) / 2 + offsetY * maxOffY;
+    ctx.drawImage(cameraFrame, srcX, srcY, srcW, srcH, 0, 0, width, height);
+  }
+}
+
+/**
  * A. 페더링 마스크 기반 블렌딩
  * 마스크 값 0~255를 알파로 사용하여 부드러운 전환
  */

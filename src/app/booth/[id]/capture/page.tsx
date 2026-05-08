@@ -8,6 +8,7 @@ import { usePhotoStore } from "@/store/usePhotoStore";
 import {
   compositeMask, calcMaskBounds, calcMultiMaskBounds,
   extractSingleMaskCanvas, createFeatheredMask,
+  drawCameraFullScreen,
   CameraTransform, MaskBounds,
 } from "@/lib/chromakey";
 import { generateId, loadImage } from "@/lib/utils";
@@ -29,6 +30,7 @@ export default function CapturePage() {
   const addPhoto = usePhotoStore((s) => s.addPhoto);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
   const coverImageRef = useRef<HTMLImageElement | null>(null);
   const maskImageRef = useRef<HTMLImageElement | null>(null);
@@ -276,6 +278,25 @@ export default function CapturePage() {
           frameBufferRef.current.capture(canvas);
         }
 
+        // 미리보기 캔버스: 마스크 비율로 카메라를 전체 화면에 렌더링
+        const previewCanvas = previewCanvasRef.current;
+        if (previewCanvas && currentBoundsRef.current) {
+          const container = previewCanvas.parentElement;
+          const pW = container?.clientWidth ?? window.innerWidth;
+          const pH = container?.clientHeight ?? window.innerHeight;
+          const dpr2 = Math.min(window.devicePixelRatio || 1, 2);
+          const pw = Math.round(pW * dpr2);
+          const ph = Math.round(pH * dpr2);
+          if (previewCanvas.width !== pw || previewCanvas.height !== ph) {
+            previewCanvas.width = pw;
+            previewCanvas.height = ph;
+            previewCanvas.style.width = `${pW}px`;
+            previewCanvas.style.height = `${pH}px`;
+          }
+          const pCtx = previewCanvas.getContext("2d")!;
+          drawCameraFullScreen(pCtx, video, pw, ph, currentBoundsRef.current, transformRef.current);
+        }
+
       }
       animFrameRef.current = requestAnimationFrame(render);
     };
@@ -493,15 +514,8 @@ export default function CapturePage() {
 
   return (
     <div className="h-screen-safe flex flex-col bg-black relative overflow-hidden">
-      {/* 전체 화면 카메라 (항상 표시, 미러링) */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        style={{ transform: "scaleX(-1)" }}
-      />
+      {/* 숨김 비디오 (캡처 전용) */}
+      <video ref={videoRef} autoPlay playsInline muted className="absolute opacity-0 pointer-events-none" style={{ width: 1, height: 1 }} />
 
       {/* 멀티컷 진행 표시 */}
       {totalCuts > 1 && (
@@ -531,18 +545,15 @@ export default function CapturePage() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* 캔버스: 캡처 전용 (숨김) — requestAnimationFrame 렌더 루프 유지됨 */}
+        {/* 합성 캔버스: 캡처 전용 (숨김) */}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* 책표지 반투명 오버레이 — 프레임 위치 가이드 */}
-        {cover?.imageData && isReady && (
-          <img
-            src={cover.imageData}
-            alt=""
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
-            style={{ opacity: 0.45 }}
-          />
-        )}
+        {/* 미리보기 캔버스: 마스크 비율 기준으로 카메라를 전체 화면에 표시 (미러링) */}
+        <canvas
+          ref={previewCanvasRef}
+          className="absolute inset-0 pointer-events-none"
+          style={{ transform: "scaleX(-1)" }}
+        />
 
         {/* 촬영 가이드 */}
         {showGuide && countdown === null && isReady && (
