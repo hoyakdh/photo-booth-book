@@ -493,8 +493,15 @@ export default function CapturePage() {
 
   return (
     <div className="h-screen-safe flex flex-col bg-black relative overflow-hidden">
-      {/* 숨김 비디오 */}
-      <video ref={videoRef} autoPlay playsInline muted className="absolute opacity-0 pointer-events-none" style={{ width: 1, height: 1 }} />
+      {/* 전체 화면 카메라 (항상 표시, 미러링) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        style={{ transform: "scaleX(-1)" }}
+      />
 
       {/* 멀티컷 진행 표시 */}
       {totalCuts > 1 && (
@@ -524,34 +531,29 @@ export default function CapturePage() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="relative flex items-center justify-center w-full h-full">
-          <canvas ref={canvasRef} className="block max-w-full max-h-full" />
-        </div>
+        {/* 캔버스: 캡처 전용 (숨김) — requestAnimationFrame 렌더 루프 유지됨 */}
+        <canvas ref={canvasRef} className="hidden" />
+
+        {/* 책표지 반투명 오버레이 — 프레임 위치 가이드 */}
+        {cover?.imageData && isReady && (
+          <img
+            src={cover.imageData}
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+            style={{ opacity: 0.45 }}
+          />
+        )}
 
         {/* 촬영 가이드 */}
-        {showGuide && guideRect && countdown === null && canvasRef.current && (() => {
-          const rect = canvasRef.current!.getBoundingClientRect();
-          const parent = canvasRef.current!.parentElement?.getBoundingClientRect();
-          if (!parent) return null;
-          const offsetLeft = rect.left - parent.left;
-          const offsetTop = rect.top - parent.top;
-          return (
-            <div
-              className="absolute z-10 pointer-events-none flex items-center justify-center"
-              style={{
-                left: offsetLeft + guideRect.rx * rect.width,
-                top: offsetTop + guideRect.ry * rect.height,
-                width: guideRect.rw * rect.width,
-                height: guideRect.rh * rect.height,
-              }}
-            >
-              <div className="absolute inset-0 border-[3px] border-dashed border-white/60 rounded-2xl animate-pulse" />
-              <p className="text-white/70 text-sm font-bold bg-black/30 px-3 py-1.5 rounded-full">
-                여기에 얼굴을 맞춰주세요
-              </p>
-            </div>
-          );
-        })()}
+        {showGuide && countdown === null && isReady && (
+          <div className="absolute bottom-6 left-0 right-0 flex justify-center z-10 pointer-events-none">
+            <p className="text-white/80 text-sm font-bold bg-black/40 px-4 py-2 rounded-full text-center">
+              {zoom < 1
+                ? "프레임 안에 단체 모두 들어오게 서 주세요"
+                : "프레임 안에 얼굴을 맞춰주세요"}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
@@ -574,7 +576,7 @@ export default function CapturePage() {
         {countdown === null && !capturing && (
         <div className="absolute right-3 bottom-3 flex flex-col items-center gap-2 z-10">
           <button onClick={() => setShowZoomUI((v) => !v)} className="w-10 h-10 bg-black/50 backdrop-blur rounded-full flex items-center justify-center text-white text-lg font-bold btn-touch">
-            {zoom > 1 ? `${zoom.toFixed(1)}x` : "ZM"}
+            {zoom !== 1 ? `${zoom.toFixed(1)}x` : "ZM"}
           </button>
           {showZoomUI && (
             <div className="flex flex-col items-center gap-1 bg-black/60 backdrop-blur rounded-2xl p-2">
