@@ -278,21 +278,38 @@ export default function CapturePage() {
           frameBufferRef.current.capture(canvas);
         }
 
-        // 미리보기 캔버스: 마스크 비율로 카메라를 전체 화면에 렌더링
+        // 미리보기 캔버스: 커버 이미지 비율(contain)로 렌더링 — 레터박스 허용
         const previewCanvas = previewCanvasRef.current;
-        if (previewCanvas && currentBoundsRef.current) {
+        if (
+          previewCanvas &&
+          currentBoundsRef.current &&
+          coverImg.naturalWidth > 0 &&
+          coverImg.naturalHeight > 0
+        ) {
           const container = previewCanvas.parentElement;
-          const pW = container?.clientWidth ?? window.innerWidth;
-          const pH = container?.clientHeight ?? window.innerHeight;
+          const containerW = container?.clientWidth ?? window.innerWidth;
+          const containerH = container?.clientHeight ?? window.innerHeight;
+          const coverAspect = coverImg.naturalWidth / coverImg.naturalHeight;
+          let pW: number;
+          let pH: number;
+          if (containerW / containerH < coverAspect) {
+            pW = containerW;
+            pH = containerW / coverAspect;
+          } else {
+            pH = containerH;
+            pW = containerH * coverAspect;
+          }
           const dpr2 = Math.min(window.devicePixelRatio || 1, 2);
           const pw = Math.round(pW * dpr2);
           const ph = Math.round(pH * dpr2);
           if (previewCanvas.width !== pw || previewCanvas.height !== ph) {
             previewCanvas.width = pw;
             previewCanvas.height = ph;
-            previewCanvas.style.width = `${pW}px`;
-            previewCanvas.style.height = `${pH}px`;
+            previewCanvas.style.width = `${Math.round(pW)}px`;
+            previewCanvas.style.height = `${Math.round(pH)}px`;
           }
+          previewCanvas.style.left = `${Math.round((containerW - pW) / 2)}px`;
+          previewCanvas.style.top = `${Math.round((containerH - pH) / 2)}px`;
           const pCtx = previewCanvas.getContext("2d")!;
           drawCameraFullScreen(pCtx, video, pw, ph, currentBoundsRef.current, transformRef.current);
         }
@@ -548,10 +565,10 @@ export default function CapturePage() {
         {/* 합성 캔버스: 캡처 전용 (숨김) */}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* 미리보기 캔버스: 마스크 비율 기준으로 카메라를 전체 화면에 표시 (미러링) */}
+        {/* 미리보기 캔버스: 커버 비율(contain)로 표시, 레터박스 허용 (미러링) */}
         <canvas
           ref={previewCanvasRef}
-          className="absolute inset-0 pointer-events-none"
+          className="absolute pointer-events-none"
           style={{ transform: "scaleX(-1)" }}
         />
 
