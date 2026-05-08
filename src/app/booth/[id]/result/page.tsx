@@ -20,7 +20,7 @@ export default function ResultPage() {
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [saved, setSaved] = useState(false);
   const [showSticker, setShowSticker] = useState(false);
-  const [gifCreating, setGifCreating] = useState(false);
+  const [gifPreparing, setGifPreparing] = useState(false);
   const [driveState, setDriveState] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [driveError, setDriveError] = useState<string | null>(null);
   const [askGoHome, setAskGoHome] = useState(false);
@@ -46,73 +46,93 @@ export default function ResultPage() {
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
+  // 저장 시 await 없이 즉시 share 가능하도록 미리 준비
+  const pngBlobRef = useRef<Blob | null>(null);
+  const gifBlobRef = useRef<Blob | null>(null);
+  const gifPreparedRef = useRef(false);
+
   const selectedPhoto = photos[selectedIdx];
-  const busy = driveState === "uploading" || localSaving || gifCreating || printing || sharing || isLoading;
+
+  // selectedPhoto 변경 시 PNG blob 미리 변환 (data URL → Blob)
+  useEffect(() => {
+    if (!selectedPhoto) return;
+    pngBlobRef.current = null;
+    fetch(selectedPhoto.imageData)
+      .then(r => r.blob())
+      .then(blob => { pngBlobRef.current = blob; })
+      .catch(() => {});
+  }, [selectedPhoto]);
+
+  // GIF 최초 1회 백그라운드 생성
+  useEffect(() => {
+    if (gifFrames.length === 0 || gifPreparedRef.current) return;
+    gifPreparedRef.current = true;
+    setGifPreparing(true);
+    createGif(gifFrames, 8, 10)
+      .then(blob => { gifBlobRef.current = blob; })
+      .catch(err => console.error("GIF 미리 생성 실패:", err))
+      .finally(() => setGifPreparing(false));
+  }, [gifFrames]);
+
+  const busy = driveState === "uploading" || localSaving || printing || sharing || isLoading;
 
   const handleDownload = useCallback(async () => {
     if (!selectedPhoto) return;
     setLocalSaving(true);
     try {
-    const ts = Date.now();
+      const ts = Date.now();
 
-    // PNG 준비
-    const pngRes = await fetch(selectedPhoto.imageData);
-    const pngBlob = await pngRes.blob();
-    const pngFile = new File([pngBlob], `photo-booth-${ts}.png`, { type: "image/png" });
-
-    // GIF 프레임이 있으면 같이 준비
-    let gifFile: File | null = null;
-    if (gifFrames.length > 0) {
-      try {
-        setGifCreating(true);
-        const gifBlob = await createGif(gifFrames, 8, 10);
-        gifFile = new File([gifBlob], `photo-booth-${ts}.gif`, { type: "image/gif" });
-      } catch (err) {
-        console.error("GIF 생성 실패:", err);
-      } finally {
-        setGifCreating(false);
+      // 미리 준비된 PNG blob 사용 (없으면 즉석 변환)
+      let pngBlob = pngBlobRef.current;
+      if (!pngBlob) {
+        pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
+        pngBlobRef.current = pngBlob;
       }
-    }
+      const pngFile = new File([pngBlob], `photo-booth-${ts}.png`, { type: "image/png" });
 
-    const filesForShare = gifFile ? [pngFile, gifFile] : [pngFile];
+      // 미리 준비된 GIF blob 사용 (준비 안 됐으면 PNG만 공유)
+      const gifFile = gifBlobRef.current
+        ? new File([gifBlobRef.current], `photo-booth-${ts}.gif`, { type: "image/gif" })
+        : null;
 
-    // 공유 시트로 두 파일 한 번에 시도
-    if (navigator.share && navigator.canShare) {
-      try {
-        if (navigator.canShare({ files: filesForShare })) {
-          await navigator.share({ files: filesForShare });
-          setSaved(true);
-          return;
+      const filesForShare = gifFile ? [pngFile, gifFile] : [pngFile];
+
+      // 공유 시트 (await 전에 파일 준비 완료 → iOS 사용자 제스처 유지)
+      if (navigator.share && navigator.canShare) {
+        try {
+          if (navigator.canShare({ files: filesForShare })) {
+            await navigator.share({ files: filesForShare });
+            setSaved(true);
+            return;
+          }
+        } catch {
+          // 사용자가 취소한 경우 — fallback으로 진행
         }
-      } catch {
-        // 사용자가 취소한 경우 — fallback으로 진행
       }
-    }
 
-    // Fallback: blob URL 다운로드 (PNG → GIF 순차)
-    const triggerDownload = (file: File) => {
-      const url = URL.createObjectURL(file);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    };
+      // Fallback: blob URL 다운로드 (PNG → GIF 순차)
+      const triggerDownload = (file: File) => {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
 
-    triggerDownload(pngFile);
-    if (gifFile) {
-      // 브라우저가 다중 다운로드를 허용하도록 살짝 지연
-      await new Promise((r) => setTimeout(r, 300));
-      triggerDownload(gifFile);
-    }
-    setSaved(true);
-    setAskGoHome(true);
+      triggerDownload(pngFile);
+      if (gifFile) {
+        await new Promise((r) => setTimeout(r, 300));
+        triggerDownload(gifFile);
+      }
+      setSaved(true);
+      setAskGoHome(true);
     } finally {
       setLocalSaving(false);
     }
-  }, [selectedPhoto, gifFrames]);
+  }, [selectedPhoto]);
 
   const handleShare = useCallback(async () => {
     if (!selectedPhoto) return;
@@ -123,20 +143,18 @@ export default function ResultPage() {
     setSharing(true);
     try {
       const ts = Date.now();
-      const pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
+
+      // 미리 준비된 PNG blob 사용 (없으면 즉석 변환)
+      let pngBlob = pngBlobRef.current;
+      if (!pngBlob) {
+        pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
+        pngBlobRef.current = pngBlob;
+      }
       const pngFile = new File([pngBlob], `photo-booth-${ts}.png`, { type: "image/png" });
 
       const files: File[] = [pngFile];
-      if (gifFrames.length > 0) {
-        try {
-          setGifCreating(true);
-          const gifBlob = await createGif(gifFrames, 8, 10);
-          files.push(new File([gifBlob], `photo-booth-${ts}.gif`, { type: "image/gif" }));
-        } catch (e) {
-          console.error("GIF 생성 실패:", e);
-        } finally {
-          setGifCreating(false);
-        }
+      if (gifBlobRef.current) {
+        files.push(new File([gifBlobRef.current], `photo-booth-${ts}.gif`, { type: "image/gif" }));
       }
 
       const shareData: ShareData = { files, title: "포토부스 결과", text: "나만의 포토북 📸" };
@@ -154,7 +172,7 @@ export default function ResultPage() {
     } finally {
       setSharing(false);
     }
-  }, [selectedPhoto, gifFrames]);
+  }, [selectedPhoto]);
 
   const handleStickerSave = useCallback((editedImage: string) => {
     if (!selectedPhoto) return;
@@ -175,16 +193,22 @@ export default function ResultPage() {
     try {
       const ts = Date.now();
 
-      // PNG 준비
-      const pngRes = await fetch(selectedPhoto.imageData);
-      const pngBlob = await pngRes.blob();
+      // 미리 준비된 PNG blob 사용 (없으면 즉석 변환)
+      let pngBlob = pngBlobRef.current;
+      if (!pngBlob) {
+        pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
+      }
       const files: { blob: Blob; name: string; mime: string }[] = [
         { blob: pngBlob, name: `photo-booth-${ts}.png`, mime: "image/png" },
       ];
 
-      // GIF 프레임이 있으면 GIF도 함께 업로드
-      if (gifFrames.length > 0) {
-        const gifBlob = await createGif(gifFrames, 8, 10);
+      // 미리 준비된 GIF blob 사용 (없으면 생성)
+      let gifBlob = gifBlobRef.current;
+      if (!gifBlob && gifFrames.length > 0) {
+        gifBlob = await createGif(gifFrames, 8, 10);
+        gifBlobRef.current = gifBlob;
+      }
+      if (gifBlob) {
         files.push({ blob: gifBlob, name: `photo-booth-${ts}.gif`, mime: "image/gif" });
       }
 
@@ -418,7 +442,7 @@ export default function ResultPage() {
             saved ? "bg-success text-white" : "bg-blue-500 text-white"
           }`}
         >
-          {localSaving ? "저장중..." : saved ? "저장 완료!" : "저장"}
+          {localSaving ? "저장중..." : saved ? "저장 완료!" : gifPreparing ? "저장 (준비중)" : "저장"}
         </button>
         <button
           onClick={handleShare}
