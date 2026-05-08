@@ -108,3 +108,20 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
     img.src = src;
   });
 }
+
+/** data URL (base64) → Blob, for blob: URLs that print correctly in iframe preview */
+export function dataURLtoBlob(dataURL: string): Blob {
+  const comma = dataURL.indexOf(",");
+  if (comma === -1) {
+    throw new Error("Invalid data URL");
+  }
+  const header = dataURL.slice(0, comma);
+  const b64 = dataURL.slice(comma + 1);
+  const mime = header.match(/^data:([^;,]*)/)?.[1] || "application/octet-stream";
+  const binary = atob(b64);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    arr[i] = binary.charCodeAt(i);
+  }
+  return new Blob([arr], { type: mime });
+}

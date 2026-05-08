@@ -10,18 +10,11 @@ import {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
-import { fileToDataURL, resizeImage } from "@/lib/utils";
+import { fileToDataURL, resizeImage, dataURLtoBlob } from "@/lib/utils";
 import { savePrintJob, getPrintJob } from "@/lib/db";
 import type { PrintJob } from "@/types";
 
 const SLOT_COUNT = 9;
-
-function escapeHtmlAttr(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 function PhotocardPrintInner() {
   const router = useRouter();
@@ -179,6 +172,15 @@ function PhotocardPrintInner() {
       );
     }
 
+    const blobUrls: string[] = [];
+    const resolvedSlots = slots.map((src) => {
+      if (!src) return null;
+      const blob = dataURLtoBlob(src);
+      const url = URL.createObjectURL(blob);
+      blobUrls.push(url);
+      return url;
+    });
+
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.right = "0";
@@ -188,24 +190,25 @@ function PhotocardPrintInner() {
     iframe.style.border = "0";
     document.body.appendChild(iframe);
 
-    const cleanup = () => {
+    const teardown = () => {
+      blobUrls.forEach((u) => URL.revokeObjectURL(u));
       setTimeout(() => {
         if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
       }, 500);
       setPrinting(false);
     };
 
-    const cellsHtml = slots
+    const cellsHtml = resolvedSlots
       .map((src) =>
         src
-          ? `<div class="card"><img src="${escapeHtmlAttr(src)}" alt="" /></div>`
+          ? `<div class="card"><img src="${src}" alt="" /></div>`
           : `<div class="card card--empty"></div>`
       )
       .join("");
 
     const doc = iframe.contentDocument;
     if (!doc) {
-      cleanup();
+      teardown();
       return;
     }
 
@@ -261,16 +264,23 @@ function PhotocardPrintInner() {
       try {
         const win = iframe.contentWindow;
         if (!win) {
-          cleanup();
+          teardown();
           return;
         }
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          teardown();
+        };
+        win.addEventListener("afterprint", finish, { once: true });
+        setTimeout(finish, 60_000);
         win.focus();
         win.print();
       } catch (err) {
         console.error("프린트 실패:", err);
         alert("인쇄를 시작하지 못했습니다.");
-      } finally {
-        cleanup();
+        teardown();
       }
     };
 
