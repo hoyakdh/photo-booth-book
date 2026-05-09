@@ -16,6 +16,11 @@ import type { PrintJob } from "@/types";
 
 const SLOT_COUNT = 9;
 
+/** 인쇄·미리보기 공통: 55mm × 85mm (= 5.5cm × 8.5cm), 칸 간격 3mm */
+const CARD_W_MM = 55;
+const CARD_H_MM = 85;
+const GRID_GAP_MM = 3;
+
 function PhotocardPrintInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,7 +225,14 @@ function PhotocardPrintInner() {
 <title>포토카드 인쇄</title>
 <style>
   @page { size: A4 portrait; margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; }
+  @media print {
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  }
   .page {
     width: 21cm;
     height: 29.7cm;
@@ -232,13 +244,13 @@ function PhotocardPrintInner() {
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(3, 5.5cm);
-    grid-template-rows: repeat(3, 8.45cm);
-    gap: 0.3cm;
+    grid-template-columns: repeat(3, ${CARD_W_MM}mm);
+    grid-template-rows: repeat(3, ${CARD_H_MM}mm);
+    gap: ${GRID_GAP_MM}mm;
   }
   .card {
-    width: 5.5cm;
-    height: 8.45cm;
+    width: ${CARD_W_MM}mm;
+    height: ${CARD_H_MM}mm;
     overflow: hidden;
     background: #fff;
     box-sizing: border-box;
@@ -334,12 +346,13 @@ function PhotocardPrintInner() {
             용지: <strong>A4</strong>, 방향: <strong>세로(Portrait)</strong>
           </li>
           <li>
-            브라우저 인쇄 설정에서 <strong>여백 없음</strong>(또는 최소)을
-            선택하면 실제 치수에 가깝게 출력됩니다.
+            브라우저 인쇄 설정에서 <strong>배율 100%</strong>(맞춤/축소 해제)와{" "}
+            <strong>여백 없음</strong>(또는 최소)을 선택하면 표기 치수에 가깝게
+            출력됩니다.
           </li>
           <li>
-            카드 한 장 크기: 가로 5.5cm × 세로 8.45cm, 한 페이지에 9장(3×3)
-            배치됩니다.
+            카드 한 장 크기: 가로 5.5cm(55mm) × 세로 8.5cm(85mm), 한 페이지에
+            9장(3×3) 배치됩니다.
           </li>
         </ul>
         <p className="text-amber-800 border-t border-amber-300 pt-2 mt-1">
@@ -425,9 +438,9 @@ function PhotocardPrintInner() {
             <div
               className="grid"
               style={{
-                gridTemplateColumns: "repeat(3, 5.5cm)",
-                gridTemplateRows: "repeat(3, 8.45cm)",
-                gap: "0.3cm",
+                gridTemplateColumns: `repeat(3, ${CARD_W_MM}mm)`,
+                gridTemplateRows: `repeat(3, ${CARD_H_MM}mm)`,
+                gap: `${GRID_GAP_MM}mm`,
               }}
             >
               {slots.map((src, i) => (
@@ -442,7 +455,8 @@ function PhotocardPrintInner() {
                       openFileForSlot(i);
                     }
                   }}
-                  className="relative w-[5.5cm] h-[8.45cm] overflow-hidden bg-gray-50 text-left cursor-pointer border border-gray-300 border-dashed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
+                  className="relative overflow-hidden bg-gray-50 text-left cursor-pointer border border-gray-300 border-dashed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
+                  style={{ width: `${CARD_W_MM}mm`, height: `${CARD_H_MM}mm` }}
                 >
                   {src ? (
                     <>
