@@ -2,6 +2,8 @@
  * 캡처된 프레임들로 애니메이션 GIF 생성
  */
 
+import { cropCanvasToPhotocardAspect } from "./photocardAspect";
+
 // gif.js는 브라우저 전용이므로 dynamic import
 export async function createGif(
   frames: HTMLCanvasElement[],
@@ -74,18 +76,24 @@ export class FrameBuffer {
     const w = Math.round(sourceCanvas.width * scale);
     const h = Math.round(sourceCanvas.height * scale);
 
-    if (this.width !== w || this.height !== h) {
-      this.width = w;
-      this.height = h;
-    }
-
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = w;
     tempCanvas.height = h;
     const tempCtx = tempCanvas.getContext("2d")!;
     tempCtx.drawImage(sourceCanvas, 0, 0, w, h);
 
-    this.currentFrames.push(tempCtx.getImageData(0, 0, w, h));
+    const cropped = cropCanvasToPhotocardAspect(tempCanvas);
+    const cw = cropped.width;
+    const ch = cropped.height;
+
+    if (this.width !== cw || this.height !== ch) {
+      this.width = cw;
+      this.height = ch;
+    }
+
+    this.currentFrames.push(
+      cropped.getContext("2d")!.getImageData(0, 0, cw, ch)
+    );
 
     // 링 버퍼: 현재 컷은 최근 framesPerCut개만 유지
     if (this.currentFrames.length > this.framesPerCut) {

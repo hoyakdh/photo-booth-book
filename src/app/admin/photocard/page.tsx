@@ -11,14 +11,15 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { fileToDataURL, resizeImage, dataURLtoBlob } from "@/lib/utils";
+import {
+  PHOTOCARD_W_MM as CARD_W_MM,
+  PHOTOCARD_H_MM as CARD_H_MM,
+} from "@/lib/photocardAspect";
 import { savePrintJob, getPrintJob } from "@/lib/db";
 import type { PrintJob } from "@/types";
 
 const SLOT_COUNT = 9;
 
-/** 인쇄·미리보기 공통: 55mm × 85mm (= 5.5cm × 8.5cm), 칸 간격 3mm */
-const CARD_W_MM = 55;
-const CARD_H_MM = 85;
 const GRID_GAP_MM = 3;
 
 function PhotocardPrintInner() {

@@ -17,6 +17,7 @@ import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/water
 import { FrameBuffer } from "@/lib/gifEncoder";
 import { useHandDetection } from "@/hooks/useHandDetection";
 import { useVoiceDetection } from "@/hooks/useVoiceDetection";
+import { cropCanvasToPhotocardAspect } from "@/lib/photocardAspect";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -427,14 +428,15 @@ export default function CapturePage() {
       } else {
         // 모든 컷 완료
         if (compositeCanvasRef.current) {
+          const cropped = cropCanvasToPhotocardAspect(compositeCanvasRef.current);
           if (wmConfigRef.current?.enabled) {
-            const compCtx = compositeCanvasRef.current.getContext("2d")!;
-            drawWatermark(compCtx, compositeCanvasRef.current.width, compositeCanvasRef.current.height, wmConfigRef.current);
+            const compCtx = cropped.getContext("2d")!;
+            drawWatermark(compCtx, cropped.width, cropped.height, wmConfigRef.current);
           }
           addPhoto({
             id: generateId(),
             bookCoverId: id,
-            imageData: compositeCanvasRef.current.toDataURL("image/png"),
+            imageData: cropped.toDataURL("image/png"),
             capturedAt: Date.now(),
           });
         }
@@ -447,14 +449,15 @@ export default function CapturePage() {
     } else {
       // 1컷 모드: 고화질 캡처 → 바로 결과 화면으로 이동
       if (hiRes) {
+        const cropped = cropCanvasToPhotocardAspect(hiRes);
         if (wmConfigRef.current?.enabled) {
-          const ctx = hiRes.getContext("2d")!;
-          drawWatermark(ctx, hiRes.width, hiRes.height, wmConfigRef.current);
+          const ctx = cropped.getContext("2d")!;
+          drawWatermark(ctx, cropped.width, cropped.height, wmConfigRef.current);
         }
         addPhoto({
           id: generateId(),
           bookCoverId: id,
-          imageData: hiRes.toDataURL("image/png"),
+          imageData: cropped.toDataURL("image/png"),
           capturedAt: Date.now(),
         });
       }

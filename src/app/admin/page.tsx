@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
 import { generateId, fileToDataURL, resizeImage } from "@/lib/utils";
+import { cropDataURLToPhotocardAspect, PHOTOCARD_W_MM, PHOTOCARD_H_MM } from "@/lib/photocardAspect";
 import { BookCover } from "@/types";
 import ChromaKeyEditor from "@/components/ChromaKeyEditor";
 import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib/watermark";
@@ -69,7 +70,8 @@ export default function AdminPage() {
 
     const dataURL = await fileToDataURL(file);
     const resized = await resizeImage(dataURL);
-    setPreview(resized);
+    const normalized = await cropDataURLToPhotocardAspect(resized);
+    setPreview(normalized);
     setMaskData(null);
     setChromaPreview(null);
   };
@@ -320,6 +322,16 @@ export default function AdminPage() {
       {/* 안내 문구 */}
       <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-6 text-sm text-amber-800">
         <p className="font-bold mb-1">안내사항</p>
+        <ul className="list-disc pl-5 space-y-1 mb-2">
+          <li>
+            포토카드 인쇄와 동일하게 보이려면 책표지 비율이{" "}
+            <strong>
+              가로 {PHOTOCARD_W_MM}∶세로 {PHOTOCARD_H_MM} (11∶17)
+            </strong>
+            과 같으면 좋습니다. 업로드 시 원본 중앙을 기준으로 이 비율로 자동 잘림이
+            적용됩니다.
+          </li>
+        </ul>
         <p>등록한 책표지는 이 브라우저의 로컬 저장소에 저장됩니다. 브라우저 데이터 삭제, 시크릿 모드 사용, 다른 기기/브라우저에서 접속 시 등록한 책표지가 사라질 수 있습니다.</p>
         <div className="flex gap-2 mt-3">
           <button
@@ -377,6 +389,14 @@ export default function AdminPage() {
             <label className="block text-sm font-medium mb-1">
               책표지 이미지
             </label>
+            <p className="text-xs text-gray-600 mb-2">
+              업로드 후{" "}
+              <strong>
+                {PHOTOCARD_W_MM}∶{PHOTOCARD_H_MM}(11∶17)
+              </strong>
+              비율로 중앙 크롭됩니다. 크로마키 편집 전에 적용되므로, 마스크는 이
+              크롭 결과 기준입니다.
+            </p>
             <input
               ref={fileInputRef}
               type="file"
