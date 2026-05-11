@@ -33,10 +33,7 @@ function PhotocardPrintInner() {
   const [printing, setPrinting] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [loadingJob, setLoadingJob] = useState(false);
-  // single: 특정 슬롯 교체 / multi: 빈 슬롯부터 순서대로 채우기
-  const fileModeRef = useRef<"single" | "multi">("single");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const multiFileInputRef = useRef<HTMLInputElement>(null);
   const slotIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -72,20 +69,10 @@ function PhotocardPrintInner() {
 
   const openFileForSlot = (index: number) => {
     slotIndexRef.current = index;
-    fileModeRef.current = "single";
     fileInputRef.current?.click();
   };
 
-  const openMultiFile = () => {
-    fileModeRef.current = "multi";
-    multiFileInputRef.current?.click();
-  };
-
-  const processFiles = async (
-    files: File[],
-    mode: "single" | "multi",
-    startIdx: number | null
-  ) => {
+  const processFiles = async (files: File[], startIdx: number) => {
     setLoadingSlots(true);
     try {
       const results = await Promise.all(
@@ -97,18 +84,19 @@ function PhotocardPrintInner() {
 
       setSlots((prev) => {
         const next = [...prev];
-        if (mode === "single" && startIdx !== null) {
-          next[startIdx] = results[0];
-        } else {
-          // 빈 슬롯 인덱스 목록
-          const emptyIndices = next
-            .map((v, i) => (v === null ? i : -1))
-            .filter((i) => i !== -1);
-          results.forEach((img, ri) => {
-            if (ri < emptyIndices.length) {
-              next[emptyIndices[ri]] = img;
-            }
-          });
+        let ri = 0;
+        for (let j = startIdx; j < SLOT_COUNT && ri < results.length; j++) {
+          if (next[j] === null) {
+            next[j] = results[ri++];
+          }
+        }
+        const skipped = results.length - ri;
+        if (skipped > 0) {
+          queueMicrotask(() =>
+            alert(
+              `선택한 이미지 중 ${skipped}장은 클릭한 위치부터 비어 있는 칸이 없어 넣지 못했습니다.`
+            )
+          );
         }
         return next;
       });
@@ -126,16 +114,7 @@ function PhotocardPrintInner() {
     e.target.value = "";
     slotIndexRef.current = null;
     if (files.length === 0 || idx === null) return;
-    await processFiles(files, "single", idx);
-  };
-
-  const handleMultiFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (files.length === 0) return;
-    await processFiles(files, "multi", null);
+    await processFiles(files, idx);
   };
 
   const clearSlot = useCallback((index: number) => {
@@ -355,6 +334,12 @@ function PhotocardPrintInner() {
             카드 한 장 크기: 가로 5.5cm(55mm) × 세로 8.5cm(85mm), 한 페이지에
             9장(3×3) 배치됩니다.
           </li>
+          <li>
+            슬롯을 누르면 이미지를 <strong>여러 장 선택</strong>할 수 있습니다.
+            선택 순서대로 <strong>빈 칸만</strong> 채워지며, 클릭한 칸{" "}
+            <strong>이후</strong> 칸 순서만 사용됩니다 (이미 사진이 있는 칸은
+            건너뜀).
+          </li>
         </ul>
         <p className="text-amber-800 border-t border-amber-300 pt-2 mt-1">
           ⚠️ <strong>주의:</strong> 인쇄 기록은 이 기기의 브라우저 로컬 저장소에만
@@ -364,14 +349,6 @@ function PhotocardPrintInner() {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          type="button"
-          onClick={openMultiFile}
-          disabled={loadingSlots || loadingJob}
-          className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold btn-touch disabled:opacity-50"
-        >
-          {loadingSlots ? "불러오는 중…" : "여러 이미지 한번에 넣기"}
-        </button>
         <button
           type="button"
           onClick={fillAllFromFirst}
@@ -400,27 +377,18 @@ function PhotocardPrintInner() {
         </button>
       </div>
 
-      {/* 단일 슬롯 교체용 */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={handleFileChange}
       />
-      {/* 다중 선택 → 빈 슬롯 채우기용 */}
-      <input
-        ref={multiFileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleMultiFileChange}
-      />
 
       <p className="text-sm text-gray-600 mb-3">
-        각 칸을 눌러 이미지를 개별로 넣거나 바꿀 수 있습니다. 우측 상단 ×로
-        비울 수 있습니다.
+        각 칸을 눌러 한 장 또는 여러 장을 넣습니다. 교체가 필요하면 ×로 빈 칸으로
+        만든 뒤 다시 넣어 주세요.
       </p>
 
       <div className="flex justify-center overflow-x-auto py-2">
