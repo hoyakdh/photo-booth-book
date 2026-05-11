@@ -519,7 +519,7 @@ export default function AdminPage() {
                       : "border-gray-100"
                 } ${selectMode ? "cursor-pointer" : ""} ${
                   dragIndex === index ? "opacity-50 scale-95" : ""
-                }`}
+                } ${cover.isActive === false ? "opacity-60" : ""}`}
               >
                 {/* 선택 모드: 체크박스 */}
                 {selectMode && (
@@ -581,6 +581,40 @@ export default function AdminPage() {
                   </p>
                   {cover.maskData && (
                     <span className="text-xs text-green-500 font-medium">크로마키 설정됨</span>
+                  )}
+                  {!selectMode && (
+                    <label
+                      className="mt-2 flex items-center justify-between gap-3 cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => { e.stopPropagation(); handleLongPressEnd(); }}
+                      onPointerMove={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchMove={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-xs text-gray-600 font-medium">메인 표시</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={cover.isActive !== false}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateCover({
+                            ...cover,
+                            isActive: cover.isActive === false,
+                          });
+                        }}
+                        className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 btn-touch ${
+                          cover.isActive !== false ? "bg-green-500" : "bg-gray-300"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition ${
+                            cover.isActive !== false ? "translate-x-6" : "translate-x-0.5"
+                          }`}
+                        />
+                      </button>
+                    </label>
                   )}
                   {!selectMode && (
                     <div

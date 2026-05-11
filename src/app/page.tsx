@@ -7,7 +7,16 @@ import { loadKioskConfig } from "@/lib/kiosk";
 
 export default function HomePage() {
   const router = useRouter();
-  const { covers, loading, reorderCovers } = useBookCovers();
+  const { covers: allCovers, loading, reorderCovers } = useBookCovers();
+  const covers = allCovers.filter((c) => c.isActive !== false);
+
+  const applyActiveReorder = (reorderedActive: typeof allCovers) => {
+    let i = 0;
+    const merged = allCovers.map((c) =>
+      c.isActive === false ? c : reorderedActive[i++]
+    );
+    reorderCovers(merged);
+  };
 
   const [kioskMode, setKioskMode] = useState(false);
   const tapCountRef = useRef(0);
@@ -42,7 +51,7 @@ export default function HomePage() {
       const arr = [...covers];
       const [moved] = arr.splice(selectedIdx, 1);
       arr.splice(idx, 0, moved);
-      reorderCovers(arr);
+      applyActiveReorder(arr);
       setSelectedIdx(null);
     }
   };

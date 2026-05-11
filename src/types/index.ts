@@ -7,6 +7,8 @@ export interface BookCover {
   createdAt: number;
   order?: number;
   defaultZoom?: number; // 촬영 진입 시 자동 적용할 기본 줌 (없거나 1 = 기본)
+  /** false면 메인에서 숨김. 없거나 true면 표시 */
+  isActive?: boolean;
 }
 
 export interface CapturedPhoto {
