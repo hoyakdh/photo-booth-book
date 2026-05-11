@@ -17,7 +17,7 @@ import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/water
 import { FrameBuffer } from "@/lib/gifEncoder";
 import { useHandDetection } from "@/hooks/useHandDetection";
 import { useVoiceDetection } from "@/hooks/useVoiceDetection";
-import { cropCanvasToPhotocardAspect } from "@/lib/photocardAspect";
+import { cropCanvasToPhotocardAspect, getPhotocardCropSourceRect } from "@/lib/photocardAspect";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -410,9 +410,23 @@ export default function CapturePage() {
         compCtx.drawImage(hiRes, 0, 0);
       }
 
-      // 현재 컷 GIF 프레임 확정 저장
+      // 현재 컷 GIF 프레임 확정 저장 (GIF 크롭 좌표계 마스크 영역 → 최종합성 오버레이용)
       if (frameBufferRef.current) {
-        frameBufferRef.current.saveCut();
+        const canvasW = canvas.width;
+        const scale = Math.min(1, 480 / canvasW);
+        const scaledH = Math.round(canvas.height * scale);
+        const scaledW = Math.round(canvasW * scale);
+        const { sx, sy } = getPhotocardCropSourceRect(scaledW, scaledH);
+        const cb = currentBoundsRef.current;
+        const gifBounds = cb
+          ? {
+              x: Math.round(cb.x * scale) - sx,
+              y: Math.round(cb.y * scale) - sy,
+              w: Math.round(cb.w * scale),
+              h: Math.round(cb.h * scale),
+            }
+          : undefined;
+        frameBufferRef.current.saveCut(gifBounds);
       }
 
       const nextCut = cut + 1;
@@ -441,7 +455,21 @@ export default function CapturePage() {
           });
         }
         if (frameBufferRef.current && frameBufferRef.current.length > 0) {
-          usePhotoStore.getState().setGifFrames(frameBufferRef.current.getFramesAsCanvases());
+          const comp = compositeCanvasRef.current;
+          let finalCompositeGif: HTMLCanvasElement | undefined;
+          if (comp) {
+            const scale = Math.min(1, 480 / canvas.width);
+            const sw = Math.round(canvas.width * scale);
+            const sh = Math.round(canvas.height * scale);
+            const tmp = document.createElement("canvas");
+            tmp.width = sw;
+            tmp.height = sh;
+            tmp.getContext("2d")!.drawImage(comp, 0, 0, sw, sh);
+            finalCompositeGif = cropCanvasToPhotocardAspect(tmp);
+          }
+          usePhotoStore
+            .getState()
+            .setGifFrames(frameBufferRef.current.getFramesAsCanvases(finalCompositeGif));
         }
         stopCamera();
         router.push(`/booth/${id}/result`);
