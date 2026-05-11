@@ -93,6 +93,13 @@ export default function AdminPage() {
   };
 
   const [showCopyrightModal, setShowCopyrightModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    ids: string[];
+    label: string;
+    detail?: string;
+    mode: "single" | "bulk";
+  } | null>(null);
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
 
   const handleSubmitClick = () => {
     if (!name.trim() || !preview) return;
@@ -120,9 +127,31 @@ export default function AdminPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("정말 삭제할까요?")) {
-      await removeCover(id);
+  const handleDelete = (id: string, coverName: string) => {
+    setDeleteConfirm({
+      ids: [id],
+      label: `「${coverName}」 책표지를 삭제할까요?`,
+      mode: "single",
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleteInProgress(true);
+    try {
+      for (const id of deleteConfirm.ids) {
+        await removeCover(id);
+      }
+      if (deleteConfirm.mode === "bulk") {
+        setSelectedIds(new Set());
+        setSelectMode(false);
+      }
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Failed to delete book cover(s):", err);
+      alert("삭제에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeleteInProgress(false);
     }
   };
 
@@ -163,7 +192,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     const selectedNames = covers
       .filter((c) => selectedIds.has(c.id))
@@ -171,13 +200,13 @@ export default function AdminPage() {
     const nameList = selectedNames.length <= 5
       ? selectedNames.map((n) => `  - ${n}`).join("\n")
       : selectedNames.slice(0, 5).map((n) => `  - ${n}`).join("\n") + `\n  ...외 ${selectedNames.length - 5}개`;
-    const label = selectedIds.size === covers.length ? "전체" : `선택한 ${selectedIds.size}개의`;
-    if (!confirm(`${label} 책표지를 삭제할까요?\n\n${nameList}`)) return;
-    for (const sid of selectedIds) {
-      await removeCover(sid);
-    }
-    setSelectedIds(new Set());
-    setSelectMode(false);
+    const headline = selectedIds.size === covers.length ? "전체" : `선택한 ${selectedIds.size}개의`;
+    setDeleteConfirm({
+      ids: [...selectedIds],
+      label: `${headline} 책표지를 삭제할까요?`,
+      detail: nameList,
+      mode: "bulk",
+    });
   };
 
   // 길게 누르기로 선택 모드 진입
@@ -290,6 +319,48 @@ export default function AdminPage() {
                 className="flex-1 py-3 bg-primary text-white rounded-xl font-bold btn-touch"
               >
                 동의하고 등록
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 책표지 삭제 확인 모달 (window.confirm은 키오스크/PWA에서 동작하지 않을 수 있음) */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+          >
+            <h3 id="delete-confirm-title" className="text-lg font-bold mb-3 text-foreground">
+              삭제 확인
+            </h3>
+            <div className="text-sm text-gray-700 mb-5 space-y-3 leading-relaxed">
+              <p>{deleteConfirm.label}</p>
+              {deleteConfirm.detail && (
+                <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                  {deleteConfirm.detail}
+                </pre>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={deleteInProgress}
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold btn-touch disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={deleteInProgress}
+                onClick={handleConfirmDelete}
+                className="flex-1 py-3 bg-danger text-white rounded-xl font-bold btn-touch disabled:opacity-50"
+              >
+                {deleteInProgress ? "삭제 중..." : "삭제"}
               </button>
             </div>
           </div>
@@ -683,7 +754,8 @@ export default function AdminPage() {
                           수정
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(cover.id); }}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(cover.id, cover.name); }}
                           className="px-3 py-1.5 bg-danger text-white rounded-lg text-sm font-medium btn-touch"
                         >
                           삭제

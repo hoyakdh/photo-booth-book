@@ -65,10 +65,7 @@ export default function HomePage() {
     <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* 헤더 */}
       <header className="text-center py-4 md:py-3 px-4 shrink-0">
-        <h1
-          className="text-3xl sm:text-4xl font-black text-primary select-none"
-          onClick={handleLogoTap}
-        >
+        <h1 className="text-3xl sm:text-4xl font-black text-primary select-none" onClick={handleLogoTap}>
           Book Photo Booth
         </h1>
         <p className="text-base sm:text-lg text-gray-500 mt-1">
