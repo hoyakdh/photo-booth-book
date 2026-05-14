@@ -466,12 +466,12 @@ export default function AdminPage() {
         <p className="font-bold mb-1">안내사항</p>
         <ul className="list-disc pl-5 space-y-1 mb-2">
           <li>
-            포토카드 인쇄와 동일하게 보이려면 책표지 비율이{" "}
+            포토카드 사이즈와 동일하게 보이려면 프레임 비율이{" "}
             <strong>
               가로 {PHOTOCARD_W_MM}∶세로 {PHOTOCARD_H_MM} (11∶17)
             </strong>
             과 같으면 좋습니다. 업로드 시 원본 중앙을 기준으로 이 비율로 자동 잘림이
-            적용됩니다.
+            적용됩니다. AI 프레임 만들기 tip을 이용하여 프레임 만들기 하시면 원하는 프레임으로 사용 가능합니다.
           </li>
         </ul>
         <p>등록한 책표지는 이 브라우저의 로컬 저장소에 저장됩니다. 브라우저 데이터 삭제, 시크릿 모드 사용, 다른 기기/브라우저에서 접속 시 등록한 책표지가 사라질 수 있습니다.</p>
