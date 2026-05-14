@@ -530,14 +530,6 @@ export default function AdminPage() {
             <label className="block text-sm font-medium mb-1">
               책표지 이미지
             </label>
-            <p className="text-xs text-gray-600 mb-2">
-              업로드 후{" "}
-              <strong>
-                {PHOTOCARD_W_MM}∶{PHOTOCARD_H_MM}(11∶17)
-              </strong>
-              비율로 중앙 크롭됩니다. 크로마키 편집 전에 적용되므로, 마스크는 이
-              크롭 결과 기준입니다.
-            </p>
             <input
               ref={fileInputRef}
               type="file"
