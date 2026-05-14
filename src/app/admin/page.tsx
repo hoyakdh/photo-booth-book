@@ -11,6 +11,21 @@ import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib
 import { exportBookCovers, importBookCovers } from "@/lib/backup";
 import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
 
+const AI_FRAME_PROMPT = `첨부한 책표지 이미지를 분석해서, 그 이미지의 제목, 분위기, 색감, 핵심 상징 요소, 일러스트 느낌을 자동으로 반영한
+55×85mm 세로형 아이돌 포토카드 비율의 4칸 인생네컷 프레임을 만들어줘.
+
+조건:
+- 2:3 비율, 세로형, 고해상도
+- 4칸 사진 프레임, 2×2 배열
+- 각 사진 칸은 흰색 빈 공간, 둥근 모서리
+- 사진 칸 안에는 그림/글씨/장식 금지
+- 첨부 이미지의 메인 제목만 추출해서 하단에 넣기
+- 작가명, 출판사명, 수상 문구, 로고는 제외
+- 첨부 이미지의 분위기와 핵심 소재를 바탕으로 장식 요소를 자동으로 구성
+- 어린이용으로 따뜻하고 귀엽게 재해석
+- 원본 책표지를 그대로 복제하지 말고 새로운 프레임 디자인으로 만들기
+- 인쇄용 포토카드 프레임처럼 깔끔하게 정리하기`;
+
 export default function AdminPage() {
   const router = useRouter();
   const { covers, loading, addCover, removeCover, updateCover, reorderCovers } = useBookCovers();
@@ -24,6 +39,14 @@ export default function AdminPage() {
   const [chromaPreview, setChromaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showChromaEditor, setShowChromaEditor] = useState(false);
+  const [showTip, setShowTip] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const handleCopyTipPrompt = () => {
+    navigator.clipboard.writeText(AI_FRAME_PROMPT).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    });
+  };
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // 내보내기/가져오기
@@ -325,6 +348,54 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* AI 프레임 만들기 Tip */}
+      {showTip && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tip-frame-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTip(false);
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <h3 id="tip-frame-title" className="font-bold text-base text-foreground">
+                AI로 포토카드 프레임 만들기
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowTip(false)}
+                className="w-10 h-10 rounded-xl text-gray-500 hover:bg-gray-100 font-bold btn-touch"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm text-gray-700">
+              <p>
+                <strong>ChatGPT</strong> 또는 <strong>Gemini</strong>에서 책 표지 이미지를 <strong>첨부</strong>한 뒤 아래
+                프롬프트를 붙여넣으세요.
+              </p>
+              <div className="relative bg-gray-50 rounded-xl p-4 pr-14 pt-10 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed border border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleCopyTipPrompt}
+                  className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold btn-touch shrink-0"
+                >
+                  {promptCopied ? "복사됨" : "복사"}
+                </button>
+                {AI_FRAME_PROMPT}
+              </div>
+              <p className="text-gray-400 text-xs">
+                생성된 이미지를 저장한 다음, 위 양식에서 책 이름과 함께 책표지로 등록하면 됩니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 책표지 삭제 확인 모달 (window.confirm은 키오스크/PWA에서 동작하지 않을 수 있음) */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
@@ -430,9 +501,18 @@ export default function AdminPage() {
 
       {/* 등록/수정 폼 */}
       <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-orange-100">
-        <h2 className="text-lg font-bold mb-4 text-primary">
-          새 책표지 등록
-        </h2>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-bold text-primary">새 책표지 등록</h2>
+          <button
+            type="button"
+            onClick={() => setShowTip(true)}
+            className="w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold flex items-center justify-center hover:bg-primary/25 btn-touch shrink-0"
+            title="AI로 프레임 만들기 안내"
+            aria-label="프레임 만들기 팁"
+          >
+            ?
+          </button>
+        </div>
 
         <div className="space-y-4">
           <div>
