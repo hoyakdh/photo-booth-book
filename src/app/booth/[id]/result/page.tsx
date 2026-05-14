@@ -9,6 +9,7 @@ import BindingLoader from "@/components/result/BindingLoader";
 import { createGif } from "@/lib/gifEncoder";
 import { uploadToDrive } from "@/lib/drive";
 import { loadKioskConfig } from "@/lib/kiosk";
+import type { StickerData } from "@/types";
 
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -174,17 +175,26 @@ export default function ResultPage() {
     }
   }, [selectedPhoto]);
 
-  const handleStickerSave = useCallback((editedImage: string) => {
-    if (!selectedPhoto) return;
-    // 스티커 적용된 이미지로 업데이트
-    const store = usePhotoStore.getState();
-    const updated = store.capturedPhotos.map((p, idx) =>
-      idx === selectedIdx ? { ...p, imageData: editedImage } : p
-    );
-    usePhotoStore.setState({ capturedPhotos: updated });
-    setShowSticker(false);
-    setSaved(false);
-  }, [selectedPhoto, selectedIdx]);
+  const handleStickerSave = useCallback(
+    (editedImage: string, stickerList: StickerData[], originalImageData: string) => {
+      if (!selectedPhoto) return;
+      const store = usePhotoStore.getState();
+      const updated = store.capturedPhotos.map((p, idx) =>
+        idx === selectedIdx
+          ? {
+              ...p,
+              imageData: editedImage,
+              originalImageData,
+              decorations: stickerList.length > 0 ? stickerList : undefined,
+            }
+          : p
+      );
+      usePhotoStore.setState({ capturedPhotos: updated });
+      setShowSticker(false);
+      setSaved(false);
+    },
+    [selectedPhoto, selectedIdx]
+  );
 
   const handleDriveSave = useCallback(async () => {
     if (!selectedPhoto) return;
@@ -325,7 +335,8 @@ export default function ResultPage() {
       {/* 스티커 에디터 */}
       {showSticker && selectedPhoto && (
         <StickerEditor
-          imageData={selectedPhoto.imageData}
+          imageData={selectedPhoto.originalImageData ?? selectedPhoto.imageData}
+          initialStickers={selectedPhoto.decorations}
           onSave={handleStickerSave}
           onCancel={() => setShowSticker(false)}
         />

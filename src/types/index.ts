@@ -11,11 +11,26 @@ export interface BookCover {
   isActive?: boolean;
 }
 
+/** 꾸미기(스티커/텍스트) 레이어 — 편집 시 복원용 */
+export interface StickerData {
+  id: string;
+  content: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
 export interface CapturedPhoto {
   id: string;
   bookCoverId: string;
-  imageData: string; // Base64 PNG data URL
+  /** 표시·인쇄·공유용 flat PNG (스티커 합성 후) */
+  imageData: string;
   capturedAt: number;
+  /** 스티커 없는 원본 베이스 (재편집 시 캔버스 배경) */
+  originalImageData?: string;
+  /** 편집 가능한 데코레이션 목록 */
+  decorations?: StickerData[];
 }
 
 /** 포토카드 인쇄 한 번에 대한 기록 (9슬롯 data URL) */
