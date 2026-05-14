@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useBookCovers } from "@/hooks/useBookCovers";
 import { useRef, useState, useEffect } from "react";
 import { loadKioskConfig } from "@/lib/kiosk";
+import { seedDefaultCovers } from "@/lib/seed";
 
 export default function HomePage() {
   const router = useRouter();
-  const { covers: allCovers, loading, reorderCovers } = useBookCovers();
+  const { covers: allCovers, loading, reorderCovers, reloadCovers } = useBookCovers();
+  const [seeding, setSeeding] = useState(true);
   const covers = allCovers.filter((c) => c.isActive !== false);
 
   const applyActiveReorder = (reorderedActive: typeof allCovers) => {
@@ -25,6 +27,22 @@ export default function HomePage() {
   useEffect(() => {
     setKioskMode(loadKioskConfig().enabled);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    seedDefaultCovers()
+      .then(() => {
+        if (!cancelled) return reloadCovers();
+      })
+      .finally(() => {
+        if (!cancelled) setSeeding(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadCovers]);
+
+  const isLoading = loading || seeding;
 
   const handleLogoTap = () => {
     tapCountRef.current += 1;
@@ -75,7 +93,7 @@ export default function HomePage() {
 
       {/* 책표지 그리드 */}
       <main className="flex-1 min-h-0 px-4 pb-3 overflow-y-auto">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-60">
             <div className="text-xl text-gray-400">불러오는 중...</div>
           </div>

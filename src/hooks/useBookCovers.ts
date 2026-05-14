@@ -9,6 +9,7 @@ export function useBookCovers() {
   const [loading, setLoading] = useState(true);
 
   const loadCovers = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await getAllBookCovers();
       setCovers(data);
@@ -44,7 +45,15 @@ export function useBookCovers() {
     await Promise.all(updated.map((c) => saveBookCover(c)));
   };
 
-  return { covers, loading, addCover, removeCover, updateCover, reorderCovers };
+  return {
+    covers,
+    loading,
+    addCover,
+    removeCover,
+    updateCover,
+    reorderCovers,
+    reloadCovers: loadCovers,
+  };
 }
 
 export function useBookCover(id: string) {
