@@ -502,21 +502,21 @@ export default function AdminPage() {
       {/* 등록/수정 폼 */}
       <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-orange-100">
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-lg font-bold text-primary">새 책표지 등록</h2>
+          <h2 className="text-lg font-bold text-primary">새 인생4컷 프레임 등록</h2>
           <button
             type="button"
             onClick={() => setShowTip(true)}
-            className="w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold flex items-center justify-center hover:bg-primary/25 btn-touch shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-primary/15 text-primary text-xs font-bold shrink-0 hover:bg-primary/25 btn-touch whitespace-nowrap"
             title="AI로 프레임 만들기 안내"
             aria-label="프레임 만들기 팁"
           >
-            ?
+            AI 인생4컷 프레임 만들기 tip
           </button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">책 이름</label>
+            <label className="block text-sm font-medium mb-1">인생4컷 프레임 이름</label>
             <input
               type="text"
               value={name}
@@ -528,7 +528,7 @@ export default function AdminPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              책표지 이미지
+              인생4컷 프레임 이미지
             </label>
             <input
               ref={fileInputRef}
