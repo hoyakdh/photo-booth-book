@@ -466,7 +466,7 @@ export default function AdminPage() {
         <p className="font-bold mb-1">안내사항</p>
         <ul className="list-disc pl-5 space-y-1 mb-2">
           <li>
-            포토카드 사이즈와 동일하게 보이려면 프레임 비율이{" "}
+            이 웹사이트는 포토카드 사이즈를 기본으로 하고 있습니다. 포토카드 사이즈와 동일하게 보이려면 프레임 비율이{" "}
             <strong>
               가로 {PHOTOCARD_W_MM}∶세로 {PHOTOCARD_H_MM} (11∶17)
             </strong>
