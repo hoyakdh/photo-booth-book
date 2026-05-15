@@ -193,7 +193,7 @@ export function drawWatermark(
   const lines = buildWatermarkLines(config);
   if (lines.length === 0) return;
 
-  const { fontSize, lineHeight } = getWatermarkSizing(width, config);
+  const { fontSize, padding, lineHeight } = getWatermarkSizing(width, config);
 
   ctx.save();
   ctx.globalAlpha = config.opacity;
