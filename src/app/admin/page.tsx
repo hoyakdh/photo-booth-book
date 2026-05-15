@@ -8,7 +8,13 @@ import { cropDataURLToPhotocardAspect, PHOTOCARD_W_MM, PHOTOCARD_H_MM } from "@/
 import { BookCover } from "@/types";
 import ChromaKeyEditor from "@/components/ChromaKeyEditor";
 import WatermarkDragPreview from "@/components/WatermarkDragPreview";
-import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib/watermark";
+import {
+  WatermarkConfig,
+  loadWatermarkConfig,
+  saveWatermarkConfig,
+  WATERMARK_FONT_OPTIONS,
+  DEFAULT_WATERMARK_FONT_FAMILY,
+} from "@/lib/watermark";
 import { exportBookCovers, importBookCovers } from "@/lib/backup";
 import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
 
@@ -900,6 +906,32 @@ export default function AdminPage() {
                       onChange={(e) => updateWm({ color: e.target.value })}
                       className="w-10 h-10 rounded border-0 cursor-pointer"
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">폰트</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {WATERMARK_FONT_OPTIONS.map(({ label, value }) => {
+                      const current =
+                        wm.fontFamily?.trim() || DEFAULT_WATERMARK_FONT_FAMILY;
+                      const selected = current === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => updateWm({ fontFamily: value })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold btn-touch border-2 transition-colors ${
+                            selected
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-blue-200 bg-white text-gray-700 hover:border-blue-400"
+                          }`}
+                          style={{ fontFamily: value }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

@@ -6,11 +6,26 @@ export interface WatermarkConfig {
   fontSize: number;
   color: string;
   opacity: number;
+  /** 폰트(저장값). next/layout에서 주입한 `--wm-font-*` 와 매칭 */
+  fontFamily?: string;
   /** 워터마크 블록 좌상단 X (캔버스 너비 대비 0~1). 없으면 position 모서리 기준 */
   x?: number;
   /** 워터마크 첫 줄 베이스라인 위 Y (캔버스 높이 대비 0~1, textBaseline=top) */
   y?: number;
 }
+
+/** Google Fonts(레이아웃에서 로드)와 동일한 논리 이름 — `layout`의 `--wm-font-gothic` / `--wm-font-serif` 와 대응 */
+export const WATERMARK_GOTHIC_FONT = '"Noto Sans KR", sans-serif';
+export const WATERMARK_SERIF_FONT = '"Noto Serif KR", serif';
+export const WATERMARK_SYSTEM_FONT = "sans-serif";
+
+export const WATERMARK_FONT_OPTIONS = [
+  { label: "고딕 (기본)", value: WATERMARK_GOTHIC_FONT },
+  { label: "명조", value: WATERMARK_SERIF_FONT },
+  { label: "시스템 기본", value: WATERMARK_SYSTEM_FONT },
+] as const;
+
+export const DEFAULT_WATERMARK_FONT_FAMILY = WATERMARK_GOTHIC_FONT;
 
 const STORAGE_KEY = "photo-booth-watermark";
 
@@ -22,9 +37,26 @@ const DEFAULT_CONFIG: WatermarkConfig = {
   fontSize: 18,
   color: "#ffffff",
   opacity: 0.8,
+  fontFamily: DEFAULT_WATERMARK_FONT_FAMILY,
 };
 
-const FONT_FAMILY = `-apple-system, "Noto Sans KR", sans-serif`;
+/** 캔버스·미리보기에서 실제로 그릴 font-family (next/font 최적화 이름 반영) */
+export function resolveWatermarkFontFamily(config: WatermarkConfig): string {
+  const choice =
+    (config.fontFamily?.trim() || DEFAULT_WATERMARK_FONT_FAMILY) as string;
+  if (typeof document === "undefined") return choice;
+
+  const root = document.documentElement;
+  if (choice === WATERMARK_GOTHIC_FONT) {
+    const injected = root.style.getPropertyValue("--wm-font-gothic").trim();
+    return injected || choice;
+  }
+  if (choice === WATERMARK_SERIF_FONT) {
+    const injected = root.style.getPropertyValue("--wm-font-serif").trim();
+    return injected || choice;
+  }
+  return choice;
+}
 
 export function loadWatermarkConfig(): WatermarkConfig {
   try {
@@ -89,7 +121,7 @@ export type WatermarkBlockMetrics = {
 };
 
 /**
- * 줄 텍스트의 바운딩 박스(좌측 상단 기준 stroked text와 유사하게 여유 포함)
+ * 줄 텍스트의 바운딩 박스(좌측 상단 기준, 측정·레이아웃용 여유 포함)
  */
 export function getWatermarkBlockMetrics(
   width: number,
@@ -101,6 +133,7 @@ export function getWatermarkBlockMetrics(
   const { fontSize, padding, lineHeight } = getWatermarkSizing(width, config);
   const canvas =
     typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const family = resolveWatermarkFontFamily(config);
   if (!canvas) {
     const approxW =
       Math.max(...lines.map((l) => l.length), 1) * fontSize * 0.65 +
@@ -115,10 +148,10 @@ export function getWatermarkBlockMetrics(
     };
   }
   const ctx = canvas.getContext("2d")!;
-  ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+  ctx.font = `bold ${fontSize}px ${family}`;
   const maxLineWidth = measureMaxLineWidth(ctx, lines);
-  const strokeSlop = Math.max(2, fontSize / 8);
-  const blockW = maxLineWidth + strokeSlop;
+  const widthSlop = Math.max(2, fontSize / 8);
+  const blockW = maxLineWidth + widthSlop;
   const blockH = lines.length * lineHeight;
   return { fontSize, padding, lineHeight, maxLineWidth, blockW, blockH };
 }
@@ -194,19 +227,18 @@ export function drawWatermark(
   if (lines.length === 0) return;
 
   const { fontSize, padding, lineHeight } = getWatermarkSizing(width, config);
+  const family = resolveWatermarkFontFamily(config);
 
   ctx.save();
   ctx.globalAlpha = config.opacity;
-  ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+  ctx.font = `bold ${fontSize}px ${family}`;
   ctx.fillStyle = config.color;
-  ctx.strokeStyle = "rgba(0,0,0,0.5)";
-  ctx.lineWidth = Math.max(1, fontSize / 10);
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
   const maxLineWidth = measureMaxLineWidth(ctx, lines);
-  const strokeSlop = Math.max(2, fontSize / 8);
-  const blockW = maxLineWidth + strokeSlop;
+  const widthSlop = Math.max(2, fontSize / 8);
+  const blockW = maxLineWidth + widthSlop;
   const blockH = lines.length * lineHeight;
 
   const m: WatermarkBlockMetrics = {
@@ -230,7 +262,6 @@ export function drawWatermark(
 
   for (let i = 0; i < lines.length; i++) {
     const y = top + i * lineHeight;
-    ctx.strokeText(lines[i], left, y);
     ctx.fillText(lines[i], left, y);
   }
 

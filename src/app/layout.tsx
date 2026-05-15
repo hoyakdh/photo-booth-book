@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { CSSProperties, ReactNode } from "react";
+import { Geist, Geist_Mono, Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
 import KioskProvider from "@/components/KioskProvider";
 import Footer from "@/components/Footer";
@@ -12,6 +13,18 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const watermarkNotoSans = Noto_Sans_KR({
+  weight: ["700"],
+  variable: "--font-watermark-noto-sans",
+  display: "swap",
+});
+
+const watermarkNotoSerif = Noto_Serif_KR({
+  weight: ["700"],
+  variable: "--font-watermark-noto-serif",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -36,12 +49,18 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html
       lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${watermarkNotoSans.variable} ${watermarkNotoSerif.variable} h-full antialiased`}
+      style={
+        {
+          "--wm-font-gothic": watermarkNotoSans.style.fontFamily,
+          "--wm-font-serif": watermarkNotoSerif.style.fontFamily,
+        } as CSSProperties
+      }
     >
       <body className="flex min-h-[100dvh] flex-col bg-gradient-to-b from-yellow-50 to-orange-50">
         <KioskProvider>

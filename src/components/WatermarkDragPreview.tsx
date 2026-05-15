@@ -8,6 +8,7 @@ import {
   getWatermarkBlockMetrics,
   getWatermarkSizing,
   normalizedPositionFromCorner,
+  resolveWatermarkFontFamily,
 } from "@/lib/watermark";
 
 const CORNERS: { label: string; position: WatermarkConfig["position"] }[] = [
@@ -64,7 +65,7 @@ export default function WatermarkDragPreview({
     if (dims.w < 40 || dims.h < 40) return;
     const n = normalizedPositionFromCorner(wm, dims.w, dims.h);
     if (n) updateRef.current({ x: n.x, y: n.y });
-  }, [wm.enabled, wm.position, wm.showDate, wm.text, wm.fontSize, dims.w, dims.h, lines.length]); // eslint-disable-line react-hooks/exhaustive-deps -- wm 일부만 감시; x/y는 제외
+  }, [wm.enabled, wm.position, wm.showDate, wm.text, wm.fontSize, wm.fontFamily, dims.w, dims.h, lines.length]); // eslint-disable-line react-hooks/exhaustive-deps -- wm 일부만 감시; x/y는 제외
 
   const metrics =
     dims.w > 0 && dims.h > 0 ? getWatermarkBlockMetrics(dims.w, dims.h, wm, lines) : null;
@@ -197,9 +198,7 @@ export default function WatermarkDragPreview({
               lineHeight: 1.4,
               color: wm.color,
               opacity: wm.opacity,
-              fontFamily:
-                '-apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif',
-              textShadow: "0 0 4px rgba(0,0,0,0.85), 0 0 1px rgba(0,0,0,1)",
+              fontFamily: resolveWatermarkFontFamily(wm),
               whiteSpace: "pre-line",
             }}
           >
