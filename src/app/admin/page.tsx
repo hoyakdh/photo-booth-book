@@ -453,6 +453,13 @@ export default function AdminPage() {
           </button>
           <button
             type="button"
+            onClick={() => router.push("/about")}
+            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium btn-touch"
+          >
+            소개 페이지
+          </button>
+          <button
+            type="button"
             onClick={() => router.push("/")}
             className="px-4 py-2 bg-gray-200 rounded-xl text-sm font-medium btn-touch"
           >
