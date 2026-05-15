@@ -1,8 +1,15 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 /** 연락처 · 저작자 표시 (필요 시 값만 수정하면 됩니다) */
 const CONTACT_EMAIL = "hoyakdh@icloud.com";
 const COPYRIGHT_HOLDER = "KIM DONGHO";
 
 export default function Footer() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/booth")) return null;
+
   const year = new Date().getFullYear();
 
   return (

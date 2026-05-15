@@ -80,7 +80,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden">
+    <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
       {/* 헤더 */}
       <header className="text-center py-4 md:py-3 px-4 shrink-0">
         <h1 className="text-3xl sm:text-4xl font-black text-primary select-none" onClick={handleLogoTap}>
