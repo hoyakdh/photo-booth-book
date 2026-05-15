@@ -7,6 +7,7 @@ import { generateId, fileToDataURL, resizeImage } from "@/lib/utils";
 import { cropDataURLToPhotocardAspect, PHOTOCARD_W_MM, PHOTOCARD_H_MM } from "@/lib/photocardAspect";
 import { BookCover } from "@/types";
 import ChromaKeyEditor from "@/components/ChromaKeyEditor";
+import WatermarkDragPreview from "@/components/WatermarkDragPreview";
 import { WatermarkConfig, loadWatermarkConfig, saveWatermarkConfig } from "@/lib/watermark";
 import { exportBookCovers, importBookCovers } from "@/lib/backup";
 import { KioskConfig, loadKioskConfig, saveKioskConfig } from "@/lib/kiosk";
@@ -79,12 +80,14 @@ export default function AdminPage() {
   // 워터마크 설정
   const [wm, setWm] = useState<WatermarkConfig | null>(null);
   useEffect(() => { setWm(loadWatermarkConfig()); }, []);
-  const updateWm = (partial: Partial<WatermarkConfig>) => {
-    if (!wm) return;
-    const updated = { ...wm, ...partial };
-    setWm(updated);
-    saveWatermarkConfig(updated);
-  };
+  const updateWm = useCallback((partial: Partial<WatermarkConfig>) => {
+    setWm((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...partial };
+      saveWatermarkConfig(updated);
+      return updated;
+    });
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -876,20 +879,6 @@ export default function AdminPage() {
                   <span className="text-sm">촬영 날짜 표시</span>
                 </label>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">위치</label>
-                  <select
-                    value={wm.position}
-                    onChange={(e) => updateWm({ position: e.target.value as WatermarkConfig["position"] })}
-                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl"
-                  >
-                    <option value="bottom-right">우측 하단</option>
-                    <option value="bottom-left">좌측 하단</option>
-                    <option value="top-right">우측 상단</option>
-                    <option value="top-left">좌측 상단</option>
-                  </select>
-                </div>
-
                 <div className="flex gap-4">
                   <div className="flex-1">
                     <label className="block text-sm font-medium mb-1">글자 크기</label>
@@ -926,6 +915,8 @@ export default function AdminPage() {
                   />
                   <span className="text-xs text-gray-400">{Math.round(wm.opacity * 100)}%</span>
                 </div>
+
+                <WatermarkDragPreview wm={wm} updateWm={updateWm} />
               </>
             )}
           </div>
