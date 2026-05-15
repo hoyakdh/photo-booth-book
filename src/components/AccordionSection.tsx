@@ -11,7 +11,7 @@ type AccordionSectionProps = {
 export function AccordionSection({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: AccordionSectionProps) {
   const headerId = useId();
   const panelId = useId();
