@@ -4,8 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { WatermarkConfig } from "@/lib/watermark";
 import { PHOTOCARD_W_MM, PHOTOCARD_H_MM } from "@/lib/photocardAspect";
 import {
-  buildWatermarkLines,
   getWatermarkBlockMetrics,
+  getWatermarkDrawParts,
+  getWatermarkRowGap,
   getWatermarkSizing,
   normalizedPositionFromCorner,
   resolveWatermarkFontFamily,
@@ -40,7 +41,8 @@ export default function WatermarkDragPreview({
     updateRef.current = updateWm;
   }, [updateWm]);
 
-  const lines = buildWatermarkLines(wm);
+  const parts = getWatermarkDrawParts(wm);
+  const hasParts = Boolean(parts && (parts.main || parts.date));
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -60,21 +62,22 @@ export default function WatermarkDragPreview({
   }, []);
 
   useEffect(() => {
-    if (!wm.enabled || lines.length === 0) return;
+    if (!wm.enabled || !hasParts) return;
     if (wm.x !== undefined && wm.y !== undefined) return;
     if (dims.w < 40 || dims.h < 40) return;
     const n = normalizedPositionFromCorner(wm, dims.w, dims.h);
     if (n) updateRef.current({ x: n.x, y: n.y });
-  }, [wm.enabled, wm.position, wm.showDate, wm.text, wm.fontSize, wm.fontFamily, dims.w, dims.h, lines.length]); // eslint-disable-line react-hooks/exhaustive-deps -- wm 일부만 감시; x/y는 제외
+  }, [wm.enabled, wm.position, wm.showDate, wm.text, wm.fontSize, wm.fontFamily, dims.w, dims.h, hasParts]); // eslint-disable-line react-hooks/exhaustive-deps -- wm 일부만 감시; x/y는 제외
 
   const metrics =
-    dims.w > 0 && dims.h > 0 ? getWatermarkBlockMetrics(dims.w, dims.h, wm, lines) : null;
+    dims.w > 0 && dims.h > 0 ? getWatermarkBlockMetrics(dims.w, dims.h, wm) : null;
 
   const fontPx = dims.w > 0 ? Math.round(getWatermarkSizing(dims.w, wm).fontSize) : wm.fontSize;
+  const rowGapPx = getWatermarkRowGap(fontPx);
 
   const clampAndSave = useCallback(
     (nx: number, ny: number, wpx: number, hpx: number) => {
-      const m = getWatermarkBlockMetrics(wpx, hpx, wm, lines);
+      const m = getWatermarkBlockMetrics(wpx, hpx, wm);
       if (!m) return;
       const maxX = Math.max(0, wpx - m.blockW);
       const maxY = Math.max(0, hpx - m.blockH);
@@ -82,7 +85,7 @@ export default function WatermarkDragPreview({
       const y = clamp(ny * hpx, 0, maxY) / hpx;
       updateRef.current({ x, y });
     },
-    [wm, lines]
+    [wm]
   );
 
   const applyCorner = (position: WatermarkConfig["position"]) => {
@@ -125,7 +128,7 @@ export default function WatermarkDragPreview({
     }
   };
 
-  const hasWatermarkContent = wm.enabled && lines.length > 0;
+  const hasWatermarkContent = wm.enabled && hasParts;
 
   return (
     <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
@@ -199,14 +202,24 @@ export default function WatermarkDragPreview({
               color: wm.color,
               opacity: wm.opacity,
               fontFamily: resolveWatermarkFontFamily(wm),
-              whiteSpace: "pre-line",
+              whiteSpace: "nowrap",
             }}
           >
-            {lines.join("\n")}
+            {parts?.main && parts?.date ? (
+              <span
+                className="inline-flex items-baseline"
+                style={{ gap: rowGapPx }}
+              >
+                <span>{parts.main}</span>
+                <span>{parts.date}</span>
+              </span>
+            ) : (
+              <span>{parts?.main ?? parts?.date}</span>
+            )}
           </div>
         )}
 
-        {wm.enabled && lines.length === 0 && (
+        {wm.enabled && !hasParts && (
           <div className="absolute inset-0 flex items-end justify-center p-6 z-10 pointer-events-none">
             <p className="text-[11px] text-center text-amber-800 bg-amber-100/95 rounded-xl px-3 py-2 font-medium leading-snug">
               날짜 표시 또는 텍스트를 켜면 워터마크를 배치할 수 있어요

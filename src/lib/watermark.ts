@@ -70,20 +70,39 @@ export function saveWatermarkConfig(config: WatermarkConfig): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
-/** 촬영 시점 또는 미리보기용 줄 구성 (날짜는 now 기준) — 커스텀 텍스트가 위, 날짜는 그 아래 */
+export type WatermarkDrawParts = {
+  main: string | null;
+  date: string | null;
+};
+
+/** 커스텀 텍스트·날짜 표시 여부 (날짜는 now 기준) */
+export function getWatermarkDrawParts(
+  config: WatermarkConfig,
+  now: Date = new Date()
+): WatermarkDrawParts | null {
+  const main = config.text.trim() || null;
+  const date = config.showDate
+    ? `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`
+    : null;
+  if (!main && !date) return null;
+  return { main, date };
+}
+
+/** 텍스트와 날짜를 한 줄로 쌓을 때 사이 간격 (px, 스케일된 fontSize 기준) */
+export function getWatermarkRowGap(fontSize: number): number {
+  return Math.max(4, Math.round(fontSize * 0.4));
+}
+
+/** 미리보기·레거시: 표시할 문자열 배열 (가로 한 줄일 때도 2요소) */
 export function buildWatermarkLines(
   config: WatermarkConfig,
   now: Date = new Date()
 ): string[] {
+  const parts = getWatermarkDrawParts(config, now);
+  if (!parts) return [];
   const lines: string[] = [];
-  if (config.text.trim()) {
-    lines.push(config.text.trim());
-  }
-  if (config.showDate) {
-    lines.push(
-      `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`
-    );
-  }
+  if (parts.main) lines.push(parts.main);
+  if (parts.date) lines.push(parts.date);
   return lines;
 }
 
@@ -100,17 +119,6 @@ export function getWatermarkSizing(width: number, config: WatermarkConfig) {
   return { scale, fontSize, padding, lineHeight };
 }
 
-function measureMaxLineWidth(
-  ctx: CanvasRenderingContext2D,
-  lines: string[]
-): number {
-  let w = 0;
-  for (const line of lines) {
-    w = Math.max(w, ctx.measureText(line).width);
-  }
-  return w;
-}
-
 export type WatermarkBlockMetrics = {
   fontSize: number;
   padding: number;
@@ -121,39 +129,62 @@ export type WatermarkBlockMetrics = {
 };
 
 /**
- * 줄 텍스트의 바운딩 박스(좌측 상단 기준, 측정·레이아웃용 여유 포함)
+ * 워터마크 블록 바운딩 박스(좌측 상단 기준). 텍스트+날짜 동시 표시 시 한 줄(날짜는 텍스트 오른쪽).
  */
 export function getWatermarkBlockMetrics(
   width: number,
   height: number,
   config: WatermarkConfig,
-  lines: string[]
+  now: Date = new Date()
 ): WatermarkBlockMetrics | null {
-  if (lines.length === 0) return null;
+  const parts = getWatermarkDrawParts(config, now);
+  if (!parts || (!parts.main && !parts.date)) return null;
   const { fontSize, padding, lineHeight } = getWatermarkSizing(width, config);
   const canvas =
     typeof document !== "undefined" ? document.createElement("canvas") : null;
   const family = resolveWatermarkFontFamily(config);
+  const gap = getWatermarkRowGap(fontSize);
+
+  const approxCharW = fontSize * 0.65;
+  let contentW: number;
+  if (parts.main && parts.date) {
+    contentW =
+      parts.main.length * approxCharW + gap + parts.date.length * approxCharW;
+  } else {
+    const s = parts.main ?? parts.date!;
+    contentW = s.length * approxCharW;
+  }
+  const widthSlop = Math.max(2, fontSize / 8);
+  const blockW = contentW + widthSlop;
+  const blockH = lineHeight;
+
   if (!canvas) {
-    const approxW =
-      Math.max(...lines.map((l) => l.length), 1) * fontSize * 0.65 +
-      fontSize * 0.2;
     return {
       fontSize,
       padding,
       lineHeight,
-      maxLineWidth: approxW,
-      blockW: approxW,
-      blockH: lines.length * lineHeight,
+      maxLineWidth: contentW,
+      blockW,
+      blockH,
     };
   }
   const ctx = canvas.getContext("2d")!;
   ctx.font = `bold ${fontSize}px ${family}`;
-  const maxLineWidth = measureMaxLineWidth(ctx, lines);
-  const widthSlop = Math.max(2, fontSize / 8);
-  const blockW = maxLineWidth + widthSlop;
-  const blockH = lines.length * lineHeight;
-  return { fontSize, padding, lineHeight, maxLineWidth, blockW, blockH };
+  if (parts.main && parts.date) {
+    contentW =
+      ctx.measureText(parts.main).width + gap + ctx.measureText(parts.date).width;
+  } else {
+    const s = parts.main ?? parts.date!;
+    contentW = ctx.measureText(s).width;
+  }
+  return {
+    fontSize,
+    padding,
+    lineHeight,
+    maxLineWidth: contentW,
+    blockW: contentW + widthSlop,
+    blockH: lineHeight,
+  };
 }
 
 /** 레거시 모서리(position)와 동일한 좌상단 좌표 (textAlign=left, textBaseline=top) */
@@ -161,16 +192,13 @@ export function cornerPositionToTopLeft(
   width: number,
   height: number,
   config: WatermarkConfig,
-  lines: string[],
   m: WatermarkBlockMetrics
 ): { left: number; top: number } {
-  const { padding, lineHeight, maxLineWidth } = m;
+  const { padding, blockW, blockH } = m;
   const isRight = config.position.includes("right");
   const isBottom = config.position.includes("bottom");
-  const top = isBottom
-    ? height - padding - lines.length * lineHeight
-    : padding;
-  const left = isRight ? width - padding - maxLineWidth : padding;
+  const top = isBottom ? height - padding - blockH : padding;
+  const left = isRight ? width - padding - blockW : padding;
   return { left, top };
 }
 
@@ -180,10 +208,9 @@ export function normalizedPositionFromCorner(
   width: number,
   height: number
 ): { x: number; y: number } | null {
-  const lines = buildWatermarkLines(config);
-  const metrics = getWatermarkBlockMetrics(width, height, config, lines);
+  const metrics = getWatermarkBlockMetrics(width, height, config);
   if (!metrics) return null;
-  const { left, top } = cornerPositionToTopLeft(width, height, config, lines, metrics);
+  const { left, top } = cornerPositionToTopLeft(width, height, config, metrics);
   const maxLeft = Math.max(0, width - metrics.blockW);
   const maxTop = Math.max(0, height - metrics.blockH);
   return {
@@ -223,32 +250,15 @@ export function drawWatermark(
 ): void {
   if (!config.enabled) return;
 
-  const lines = buildWatermarkLines(config);
-  if (lines.length === 0) return;
+  const parts = getWatermarkDrawParts(config);
+  if (!parts || (!parts.main && !parts.date)) return;
 
-  const { fontSize, padding, lineHeight } = getWatermarkSizing(width, config);
+  const { fontSize } = getWatermarkSizing(width, config);
   const family = resolveWatermarkFontFamily(config);
+  const gap = getWatermarkRowGap(fontSize);
 
-  ctx.save();
-  ctx.globalAlpha = config.opacity;
-  ctx.font = `bold ${fontSize}px ${family}`;
-  ctx.fillStyle = config.color;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-
-  const maxLineWidth = measureMaxLineWidth(ctx, lines);
-  const widthSlop = Math.max(2, fontSize / 8);
-  const blockW = maxLineWidth + widthSlop;
-  const blockH = lines.length * lineHeight;
-
-  const m: WatermarkBlockMetrics = {
-    fontSize,
-    padding,
-    lineHeight,
-    maxLineWidth,
-    blockW,
-    blockH,
-  };
+  const m = getWatermarkBlockMetrics(width, height, config);
+  if (!m) return;
 
   const hasCustomXY =
     config.x !== undefined &&
@@ -258,11 +268,20 @@ export function drawWatermark(
 
   const { left, top } = hasCustomXY
     ? normalizedToTopLeftPx(config, width, height, m)
-    : cornerPositionToTopLeft(width, height, config, lines, m);
+    : cornerPositionToTopLeft(width, height, config, m);
 
-  for (let i = 0; i < lines.length; i++) {
-    const y = top + i * lineHeight;
-    ctx.fillText(lines[i], left, y);
+  ctx.save();
+  ctx.globalAlpha = config.opacity;
+  ctx.font = `bold ${fontSize}px ${family}`;
+  ctx.fillStyle = config.color;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  if (parts.main && parts.date) {
+    ctx.fillText(parts.main, left, top);
+    ctx.fillText(parts.date, left + ctx.measureText(parts.main).width + gap, top);
+  } else {
+    ctx.fillText(parts.main ?? parts.date!, left, top);
   }
 
   ctx.restore();
