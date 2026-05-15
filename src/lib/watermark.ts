@@ -70,19 +70,19 @@ export function saveWatermarkConfig(config: WatermarkConfig): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
-/** 촬영 시점 또는 미리보기용 줄 구성 (날짜는 now 기준) */
+/** 촬영 시점 또는 미리보기용 줄 구성 (날짜는 now 기준) — 커스텀 텍스트가 위, 날짜는 그 아래 */
 export function buildWatermarkLines(
   config: WatermarkConfig,
   now: Date = new Date()
 ): string[] {
   const lines: string[] = [];
+  if (config.text.trim()) {
+    lines.push(config.text.trim());
+  }
   if (config.showDate) {
     lines.push(
       `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`
     );
-  }
-  if (config.text.trim()) {
-    lines.push(config.text.trim());
   }
   return lines;
 }
