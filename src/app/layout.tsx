@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import KioskProvider from "@/components/KioskProvider";
+import Footer from "@/components/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,8 +43,11 @@ export default function RootLayout({
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-[100dvh] flex flex-col bg-gradient-to-b from-yellow-50 to-orange-50">
-        <KioskProvider>{children}</KioskProvider>
+      <body className="flex min-h-[100dvh] flex-col bg-gradient-to-b from-yellow-50 to-orange-50">
+        <KioskProvider>
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </KioskProvider>
+        <Footer />
       </body>
     </html>
   );
