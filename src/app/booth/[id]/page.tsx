@@ -25,16 +25,15 @@ export default function BoothStartPage() {
       return;
     }
 
-    let bothGranted = false;
+    let cameraGranted = false;
     try {
       const cam = await navigator.permissions.query({ name: "camera" as PermissionName });
-      const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
-      bothGranted = cam.state === "granted" && mic.state === "granted";
+      cameraGranted = cam.state === "granted";
     } catch {
-      bothGranted = false;
+      cameraGranted = false;
     }
 
-    if (bothGranted) {
+    if (cameraGranted) {
       goToCapture();
       return;
     }

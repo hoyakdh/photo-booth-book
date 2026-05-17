@@ -15,8 +15,6 @@ import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
 import { FrameBuffer } from "@/lib/gifEncoder";
-import { useHandDetection } from "@/hooks/useHandDetection";
-import { useVoiceDetection } from "@/hooks/useVoiceDetection";
 import { cropCanvasToPhotocardAspect, getPhotocardCropSourceRect } from "@/lib/photocardAspect";
 
 const MIN_ZOOM = 1;
@@ -525,19 +523,6 @@ export default function CapturePage() {
     startCountdownRef.current();
   }, [countdown]);
 
-  // 손바닥 감지 자동 촬영
-  const { isSupported: handSupported, isLoading: handLoading, palmDetected } = useHandDetection({
-    videoRef,
-    enabled: isReady && countdown === null && !capturing && !flash,
-    onPalmDetected: handleCapture,
-  });
-
-  // 음성("치즈") 감지 자동 촬영
-  const { isSupported: voiceSupported, isListening, cheeseDetected } = useVoiceDetection({
-    enabled: isReady && countdown === null && !capturing && !flash,
-    onCheeseDetected: handleCapture,
-  });
-
   // 결과 보기
   const setGifFrames = usePhotoStore((s) => s.setGifFrames);
   const handleViewResults = () => {
@@ -721,48 +706,6 @@ export default function CapturePage() {
           </div>
         )}
 
-        {/* 자동 촬영 안내 */}
-        {isReady && countdown === null && !capturing && (
-          <div className="flex items-center gap-2">
-            {handSupported && (
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
-                palmDetected
-                  ? "bg-green-500/80 text-white"
-                  : handLoading
-                    ? "bg-white/10 text-white/40"
-                    : "bg-white/10 text-white/60"
-              }`}>
-                <span className="text-base">{palmDetected ? "✋" : "🖐"}</span>
-                <span>
-                  {handLoading
-                    ? "준비 중..."
-                    : palmDetected
-                      ? "손바닥 감지!"
-                      : "손바닥"}
-                </span>
-              </div>
-            )}
-            {voiceSupported && (
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm transition-colors ${
-                cheeseDetected
-                  ? "bg-green-500/80 text-white"
-                  : !isListening
-                    ? "bg-white/10 text-white/40"
-                    : "bg-white/10 text-white/60"
-              }`}>
-                <span className="text-base">{cheeseDetected ? "🧀" : "🎤"}</span>
-                <span>
-                  {!isListening
-                    ? "준비 중..."
-                    : cheeseDetected
-                      ? "치즈 감지!"
-                      : "\"치즈\""}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="w-full flex items-center justify-between">
           <button
             onClick={() => { stopCamera(); router.push(`/booth/${id}`); }}
@@ -773,9 +716,7 @@ export default function CapturePage() {
           <button
             onClick={handleCapture}
             disabled={!isReady || countdown !== null || capturing}
-            className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch ${
-              palmDetected || cheeseDetected ? "ring-4 ring-green-400 ring-offset-2 ring-offset-black" : ""
-            }`}
+            className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-40 btn-touch"
           >
             <div className="w-16 h-16 bg-white rounded-full active:bg-gray-200 transition-colors" />
           </button>

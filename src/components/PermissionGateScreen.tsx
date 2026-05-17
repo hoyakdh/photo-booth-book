@@ -31,24 +31,14 @@ async function requestCamera(): Promise<boolean> {
   }
 }
 
-async function requestMic(): Promise<boolean> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: false,
-    });
-    stream.getTracks().forEach((t) => t.stop());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export default function PermissionGateScreen({ onComplete, onBack }: PermissionGateScreenProps) {
   const [cameraStatus, setCameraStatus] = useState<PermStatus>("idle");
-  const [micStatus, setMicStatus] = useState<PermStatus>("idle");
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
   const completeTimeoutRef = useRef<number | null>(null);
 
   const scheduleComplete = useCallback(() => {
@@ -61,42 +51,28 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
     }, 500);
   }, []);
 
-  const runPermissionFlow = useCallback(async (cancelled: () => boolean) => {
-    // ── 카메라 ──
-    const camPre = await queryPermission("camera" as PermissionName);
-    if (cancelled()) return;
-
-    if (camPre === "granted") {
-      setCameraStatus("granted");
-    } else {
-      setCameraStatus("requesting");
-      const camOk = await requestCamera();
+  const runPermissionFlow = useCallback(
+    async (cancelled: () => boolean) => {
+      const camPre = await queryPermission("camera" as PermissionName);
       if (cancelled()) return;
-      if (!camOk) {
-        setCameraStatus("denied");
-        return;
+
+      if (camPre === "granted") {
+        setCameraStatus("granted");
+        scheduleComplete();
+      } else {
+        setCameraStatus("requesting");
+        const camOk = await requestCamera();
+        if (cancelled()) return;
+        if (!camOk) {
+          setCameraStatus("denied");
+          return;
+        }
+        setCameraStatus("granted");
+        scheduleComplete();
       }
-      setCameraStatus("granted");
-    }
-
-    await new Promise((r) => window.setTimeout(r, 400));
-    if (cancelled()) return;
-
-    // ── 마이크 (거부해도 촬영 진행) ──
-    const micPre = await queryPermission("microphone" as PermissionName);
-    if (cancelled()) return;
-
-    if (micPre === "granted") {
-      setMicStatus("granted");
-      scheduleComplete();
-    } else {
-      setMicStatus("requesting");
-      const micOk = await requestMic();
-      if (cancelled()) return;
-      setMicStatus(micOk ? "granted" : "denied");
-      scheduleComplete();
-    }
-  }, [scheduleComplete]);
+    },
+    [scheduleComplete],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +80,6 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus("denied");
-      setMicStatus("idle");
       return;
     }
 
@@ -122,7 +97,6 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
 
   const handleRetryCamera = async () => {
     setCameraStatus("requesting");
-    setMicStatus("idle");
 
     const camPre = await queryPermission("camera" as PermissionName);
 
@@ -135,17 +109,6 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
       return;
     }
     setCameraStatus("granted");
-
-    await new Promise((r) => window.setTimeout(r, 400));
-
-    const micPre = await queryPermission("microphone" as PermissionName);
-    if (micPre === "granted") {
-      setMicStatus("granted");
-    } else {
-      setMicStatus("requesting");
-      const micOk = await requestMic();
-      setMicStatus(micOk ? "granted" : "denied");
-    }
     scheduleComplete();
   };
 
@@ -179,7 +142,6 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
 
         <div className="w-full flex flex-col gap-3">
           <PermissionRow icon="📷" label="카메라" status={cameraStatus} />
-          <PermissionRow icon="🎤" label="마이크" status={micStatus} />
         </div>
 
         {cameraStatus === "denied" && (
