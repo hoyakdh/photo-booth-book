@@ -35,6 +35,8 @@ const FOLDER_NAME =
 const TOKEN_KEY = "drive:accessToken";
 const TOKEN_EXP_KEY = "drive:accessTokenExp";
 const FOLDER_KEY = "drive:folderId";
+const GIF_FOLDER_KEY = "drive:folderId:gif";
+const PNG_FOLDER_KEY = "drive:folderId:png";
 // 만료 여유: 실제 만료보다 60초 먼저 새로 발급
 const TOKEN_SKEW_MS = 60_000;
 
@@ -91,6 +93,8 @@ function clearCachedToken() {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_EXP_KEY);
     sessionStorage.removeItem(FOLDER_KEY);
+    sessionStorage.removeItem(GIF_FOLDER_KEY);
+    sessionStorage.removeItem(PNG_FOLDER_KEY);
   } catch {
     // 무시
   }
@@ -162,17 +166,25 @@ export interface DriveFileInput {
   mime: string;
 }
 
-async function ensureFolder(token: string, name: string): Promise<string> {
+async function ensureFolder(
+  token: string,
+  name: string,
+  parentId?: string,
+  cacheKey?: string
+): Promise<string> {
+  const storageKey = cacheKey ?? FOLDER_KEY;
   // 세션 내에 이미 확보한 폴더 ID가 있으면 재사용
   try {
-    const cached = sessionStorage.getItem(FOLDER_KEY);
+    const cached = sessionStorage.getItem(storageKey);
     if (cached) return cached;
   } catch {
     // 무시
   }
 
+  const escapedName = name.replace(/'/g, "\\'");
+  const parentClause = parentId ? ` and '${parentId}' in parents` : "";
   const q = encodeURIComponent(
-    `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    `name='${escapedName}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentClause}`
   );
   const searchRes = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
@@ -186,6 +198,11 @@ async function ensureFolder(token: string, name: string): Promise<string> {
   if (files && files.length > 0) {
     id = files[0].id;
   } else {
+    const body: { name: string; mimeType: string; parents?: string[] } = {
+      name,
+      mimeType: "application/vnd.google-apps.folder",
+    };
+    if (parentId) body.parents = [parentId];
     const createRes = await fetch(
       "https://www.googleapis.com/drive/v3/files?fields=id",
       {
@@ -194,10 +211,7 @@ async function ensureFolder(token: string, name: string): Promise<string> {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name,
-          mimeType: "application/vnd.google-apps.folder",
-        }),
+        body: JSON.stringify(body),
       }
     );
     if (!createRes.ok) {
@@ -207,7 +221,7 @@ async function ensureFolder(token: string, name: string): Promise<string> {
   }
 
   try {
-    sessionStorage.setItem(FOLDER_KEY, id);
+    sessionStorage.setItem(storageKey, id);
   } catch {
     // 무시
   }
@@ -256,10 +270,21 @@ export async function uploadToDrive(
 
   const run = async (forceNew: boolean) => {
     const token = await getAccessToken(forceNew);
-    const folderId = await ensureFolder(token, FOLDER_NAME);
+    const rootId = await ensureFolder(token, FOLDER_NAME);
+
+    const hasPng = files.some((f) => f.mime === "image/png");
+    const hasGif = files.some((f) => f.mime === "image/gif");
+
+    const [pngFolderId, gifFolderId] = await Promise.all([
+      hasPng ? ensureFolder(token, "png", rootId, PNG_FOLDER_KEY) : Promise.resolve(undefined),
+      hasGif ? ensureFolder(token, "gif", rootId, GIF_FOLDER_KEY) : Promise.resolve(undefined),
+    ]);
+
     const results: DriveUploadResult[] = [];
     for (const f of files) {
-      results.push(await uploadOne(token, f, folderId));
+      const subfolderId =
+        f.mime === "image/png" ? pngFolderId : f.mime === "image/gif" ? gifFolderId : undefined;
+      results.push(await uploadOne(token, f, subfolderId ?? rootId));
     }
     return results;
   };
