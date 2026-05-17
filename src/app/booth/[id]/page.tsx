@@ -1,19 +1,46 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
 import { useBookCover } from "@/hooks/useBookCovers";
 import { usePhotoStore } from "@/store/usePhotoStore";
+import PermissionGateScreen from "@/components/PermissionGateScreen";
 
 export default function BoothStartPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { cover, loading } = useBookCover(id);
   const clearPhotos = usePhotoStore((s) => s.clearPhotos);
+  const [showPermissionGate, setShowPermissionGate] = useState(false);
 
-  const handleStart = () => {
-    clearPhotos();
+  const goToCapture = useCallback(() => {
     router.push(`/booth/${id}/capture`);
-  };
+  }, [router, id]);
+
+  const handleStart = useCallback(async () => {
+    clearPhotos();
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      goToCapture();
+      return;
+    }
+
+    let bothGranted = false;
+    try {
+      const cam = await navigator.permissions.query({ name: "camera" as PermissionName });
+      const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      bothGranted = cam.state === "granted" && mic.state === "granted";
+    } catch {
+      bothGranted = false;
+    }
+
+    if (bothGranted) {
+      goToCapture();
+      return;
+    }
+
+    setShowPermissionGate(true);
+  }, [clearPhotos, goToCapture]);
 
   if (loading) {
     return (
@@ -34,6 +61,15 @@ export default function BoothStartPage() {
           돌아가기
         </button>
       </div>
+    );
+  }
+
+  if (showPermissionGate) {
+    return (
+      <PermissionGateScreen
+        onComplete={goToCapture}
+        onBack={() => setShowPermissionGate(false)}
+      />
     );
   }
 
