@@ -108,10 +108,11 @@ export default function PermissionGateScreen({ onComplete, onBack }: PermissionG
       return;
     }
 
-    runPermissionFlow(isCancelled);
+    const startTimer = window.setTimeout(() => runPermissionFlow(isCancelled), 600);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(startTimer);
       if (completeTimeoutRef.current != null) {
         window.clearTimeout(completeTimeoutRef.current);
         completeTimeoutRef.current = null;
