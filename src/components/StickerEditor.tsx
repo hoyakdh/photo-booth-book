@@ -279,7 +279,7 @@ export default function StickerEditor({
       ctx.rotate((sticker.rotation * Math.PI) / 180);
       ctx.font = isEmojiSticker
         ? `${fontSize}px sans-serif`
-        : `bold ${fontSize}px -apple-system, "Noto Sans KR", sans-serif`;
+        : `bold ${fontSize}px "Noto Sans KR", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 

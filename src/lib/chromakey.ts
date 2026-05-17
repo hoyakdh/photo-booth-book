@@ -30,6 +30,64 @@ function getCachedCoverPixels(
   return new Uint8ClampedArray(pixels.buffer.slice(0)) as Uint8ClampedArray<ArrayBuffer>;
 }
 
+// Canvas 2D filter 지원 여부 (Safari < 18 등은 미지원)
+let _canvasFilterSupported: boolean | null = null;
+function isCanvasFilterSupported(): boolean {
+  if (_canvasFilterSupported !== null) return _canvasFilterSupported;
+  try {
+    const c = document.createElement("canvas");
+    c.width = 1; c.height = 1;
+    const testCtx = c.getContext("2d");
+    if (!testCtx) { _canvasFilterSupported = false; return false; }
+    testCtx.filter = "blur(1px)";
+    _canvasFilterSupported = testCtx.filter === "blur(1px)";
+  } catch {
+    _canvasFilterSupported = false;
+  }
+  return _canvasFilterSupported;
+}
+
+/**
+ * Canvas filter 미지원 환경용 단순 박스 블러 (2-pass 수평+수직)
+ * 성능 우선으로 radius를 낮게 유지
+ */
+function applyBoxBlur(ctx: CanvasRenderingContext2D, w: number, h: number, radius: number) {
+  const data = ctx.getImageData(0, 0, w, h);
+  const src = new Uint8ClampedArray(data.data);
+  const dst = data.data;
+  const r = Math.max(1, Math.round(radius));
+
+  // 수평 패스
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let r_ = 0, g = 0, b = 0, count = 0;
+      for (let dx = -r; dx <= r; dx++) {
+        const nx = Math.min(w - 1, Math.max(0, x + dx));
+        const i = (y * w + nx) * 4;
+        r_ += src[i]; g += src[i + 1]; b += src[i + 2]; count++;
+      }
+      const i = (y * w + x) * 4;
+      dst[i] = r_ / count; dst[i + 1] = g / count; dst[i + 2] = b / count; dst[i + 3] = src[i + 3];
+    }
+  }
+  const mid = new Uint8ClampedArray(dst);
+
+  // 수직 패스
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let r_ = 0, g = 0, b = 0, count = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        const ny = Math.min(h - 1, Math.max(0, y + dy));
+        const i = (ny * w + x) * 4;
+        r_ += mid[i]; g += mid[i + 1]; b += mid[i + 2]; count++;
+      }
+      const i = (y * w + x) * 4;
+      dst[i] = r_ / count; dst[i + 1] = g / count; dst[i + 2] = b / count; dst[i + 3] = mid[i + 3];
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+}
+
 // 카메라 프레임용 OffscreenCanvas 재사용 (매 프레임 생성 방지)
 let sharedCameraCanvas: OffscreenCanvas | null = null;
 let sharedCameraCtx: OffscreenCanvasRenderingContext2D | null = null;
@@ -472,18 +530,30 @@ export function drawCameraFullScreen(
 
   if (zoom < 1) {
     // 줌아웃(단체): 블러 배경 + contain
-    ctx.save();
-    ctx.filter = "blur(14px)";
     const coverScale = Math.max(width / camW, height / camH);
-    ctx.drawImage(
-      cameraFrame,
-      -(camW * coverScale - width) / 2,
-      -(camH * coverScale - height) / 2,
-      camW * coverScale,
-      camH * coverScale
-    );
-    ctx.filter = "none";
-    ctx.restore();
+    const bgX = -(camW * coverScale - width) / 2;
+    const bgY = -(camH * coverScale - height) / 2;
+    const bgW = camW * coverScale;
+    const bgH = camH * coverScale;
+
+    if (isCanvasFilterSupported()) {
+      ctx.save();
+      ctx.filter = "blur(14px)";
+      ctx.drawImage(cameraFrame, bgX, bgY, bgW, bgH);
+      ctx.filter = "none";
+      ctx.restore();
+    } else {
+      // Canvas filter 미지원(Safari < 18): 저해상도 임시 캔버스에 그린 뒤 박스 블러 적용
+      const scale = 0.25;
+      const bw = Math.max(1, Math.round(width * scale));
+      const bh = Math.max(1, Math.round(height * scale));
+      const tmp = document.createElement("canvas");
+      tmp.width = bw; tmp.height = bh;
+      const tmpCtx = tmp.getContext("2d")!;
+      tmpCtx.drawImage(cameraFrame, bgX * scale, bgY * scale, bgW * scale, bgH * scale);
+      applyBoxBlur(tmpCtx, bw, bh, 4);
+      ctx.drawImage(tmp, 0, 0, width, height);
+    }
 
     ctx.save();
     ctx.beginPath();
