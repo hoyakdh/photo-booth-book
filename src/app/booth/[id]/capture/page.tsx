@@ -103,7 +103,6 @@ export default function CapturePage() {
 
   // 초기화
   useEffect(() => {
-    initAudio();
     wmConfigRef.current = loadWatermarkConfig();
     frameBufferRef.current = new FrameBuffer(15, 480, 360);
   }, []);
@@ -514,12 +513,11 @@ export default function CapturePage() {
     }, 1000);
   };
 
-  const handleCapture = useCallback(() => {
+  const handleCapture = useCallback(async () => {
     if (countdown !== null || capturingRef.current) return;
     // 사용자 제스처 시점에 AudioContext를 활성화한다.
-    // useEffect에서 initAudio를 호출해도 iOS Safari는 suspended 상태를 유지하므로
-    // 실제 클릭/탭 핸들러에서 한 번 더 호출해 확실히 resume시킨다.
-    initAudio();
+    // await 없이 initAudio하면 resume 완료 전에 playBeep이 호출되어 무음이 될 수 있다.
+    await initAudio();
     startCountdownRef.current();
   }, [countdown]);
 
