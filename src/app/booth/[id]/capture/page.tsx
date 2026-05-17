@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useBookCover } from "@/hooks/useBookCovers";
 import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
@@ -14,7 +14,6 @@ import {
 import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
-import { loadKioskConfig } from "@/lib/kiosk";
 import { FrameBuffer } from "@/lib/gifEncoder";
 import { cropCanvasToPhotocardAspect, getPhotocardCropSourceRect } from "@/lib/photocardAspect";
 
@@ -64,11 +63,6 @@ export default function CapturePage() {
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
   const [showZoomUI, setShowZoomUI] = useState(false);
-  const [edgeLightOn, setEdgeLightOn] = useState(false);
-  const [edgeLightColor, setEdgeLightColor] = useState("#ffffff");
-  const [edgeLightOpacity, setEdgeLightOpacity] = useState(0.8);
-  const [edgeLightSize, setEdgeLightSize] = useState(60);
-  const [edgeLightAnimate, setEdgeLightAnimate] = useState(false);
 
   const transformRef = useRef<CameraTransform>({ zoom: 1, offsetX: 0, offsetY: 0 });
   useEffect(() => {
@@ -111,12 +105,6 @@ export default function CapturePage() {
   useEffect(() => {
     wmConfigRef.current = loadWatermarkConfig();
     frameBufferRef.current = new FrameBuffer(15, 480, 360);
-    const kioskCfg = loadKioskConfig();
-    setEdgeLightOn(kioskCfg.edgeLight);
-    setEdgeLightColor(kioskCfg.edgeLightColor);
-    setEdgeLightOpacity(kioskCfg.edgeLightOpacity);
-    setEdgeLightSize(kioskCfg.edgeLightSize);
-    setEdgeLightAnimate(kioskCfg.edgeLightAnimate);
   }, []);
 
   // 카메라 시작
@@ -568,28 +556,6 @@ export default function CapturePage() {
     <div className="h-screen-safe flex flex-col bg-black relative overflow-hidden">
       {/* 숨김 비디오 (캡처 전용) */}
       <video ref={videoRef} autoPlay playsInline muted className="absolute opacity-0 pointer-events-none" style={{ width: 1, height: 1 }} />
-
-      {edgeLightOn && (
-        <div
-          className={`fixed inset-0 pointer-events-none z-50 ${
-            edgeLightAnimate
-              ? flash ? "animate-flash"
-                : countdown !== null ? "animate-edge-pulse"
-                  : "animate-edge-breathe"
-              : ""
-          }`}
-          style={{
-            boxShadow: `inset 0 0 ${edgeLightSize * 1.5}px ${edgeLightSize}px ${edgeLightColor}`,
-            ...(edgeLightAnimate
-              ? ({
-                  "--edge-max": edgeLightOpacity,
-                  "--edge-min": edgeLightOpacity * 0.3,
-                } as CSSProperties)
-              : { opacity: edgeLightOpacity }),
-          }}
-          aria-hidden
-        />
-      )}
 
       {/* 멀티컷 진행 표시 */}
       {totalCuts > 1 && (

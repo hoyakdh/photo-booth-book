@@ -61,18 +61,6 @@ body {
   animation: flash 0.4s ease-out;
 }
 
-/* 엣지 링 라이트 (촬영 화면) */
-@keyframes edge-breathe {
-  0%, 100% { opacity: var(--edge-min, 0.25); }
-  50%       { opacity: var(--edge-max, 0.70); }
-}
-@keyframes edge-pulse {
-  0%, 100% { opacity: var(--edge-min, 0.35); }
-  50%       { opacity: var(--edge-max, 1.00); }
-}
-.animate-edge-breathe { animation: edge-breathe 3s ease-in-out infinite; }
-.animate-edge-pulse   { animation: edge-pulse 0.8s ease-in-out infinite; }
-
 /* 버튼 터치 피드백 */
 .btn-touch:active {
   transform: scale(0.95);
@@ -106,7 +94,5 @@ body {
   .animate-page-flip,
   .animate-sparkle,
   .animate-fade-in,
-  .animate-progress,
-  .animate-edge-breathe,
-  .animate-edge-pulse { animation: none; }
+  .animate-progress { animation: none; }
 }
