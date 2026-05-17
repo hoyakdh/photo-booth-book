@@ -12,6 +12,10 @@ export interface KioskConfig {
   showDecorate: boolean;      // 결과 화면 꾸미기 버튼 노출
   showResultLoading: boolean; // 결과 화면 진입 시 제본 로딩 연출
   edgeLight: boolean;        // 촬영 화면 엣지 링 라이트 효과
+  edgeLightColor: string;    // 글로우 색상 (hex)
+  edgeLightOpacity: number;   // 광량 0.2–1.0
+  edgeLightSize: number;     // 링 굵기(px)
+  edgeLightAnimate: boolean; // 숨쉬기/카운트다운 깜빡임
 }
 
 export const DEFAULT_KIOSK: KioskConfig = {
@@ -26,6 +30,10 @@ export const DEFAULT_KIOSK: KioskConfig = {
   showDecorate: true,
   showResultLoading: true,
   edgeLight: false,
+  edgeLightColor: "#ffffff",
+  edgeLightOpacity: 0.8,
+  edgeLightSize: 60,
+  edgeLightAnimate: false,
 };
 
 export function loadKioskConfig(): KioskConfig {

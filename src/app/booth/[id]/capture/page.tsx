@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from "react";
 import { useBookCover } from "@/hooks/useBookCovers";
 import { useCamera } from "@/hooks/useCamera";
 import { usePhotoStore } from "@/store/usePhotoStore";
@@ -35,7 +35,6 @@ export default function CapturePage() {
   const coverImageRef = useRef<HTMLImageElement | null>(null);
   const maskImageRef = useRef<HTMLImageElement | null>(null);
   const wmConfigRef = useRef<WatermarkConfig | null>(null);
-  const edgeLightRef = useRef(false);
   const frameBufferRef = useRef<FrameBuffer | null>(null);
   const frameCountRef = useRef(0);
 
@@ -66,6 +65,10 @@ export default function CapturePage() {
   const [offsetY, setOffsetY] = useState(0);
   const [showZoomUI, setShowZoomUI] = useState(false);
   const [edgeLightOn, setEdgeLightOn] = useState(false);
+  const [edgeLightColor, setEdgeLightColor] = useState("#ffffff");
+  const [edgeLightOpacity, setEdgeLightOpacity] = useState(0.8);
+  const [edgeLightSize, setEdgeLightSize] = useState(60);
+  const [edgeLightAnimate, setEdgeLightAnimate] = useState(false);
 
   const transformRef = useRef<CameraTransform>({ zoom: 1, offsetX: 0, offsetY: 0 });
   useEffect(() => {
@@ -109,8 +112,11 @@ export default function CapturePage() {
     wmConfigRef.current = loadWatermarkConfig();
     frameBufferRef.current = new FrameBuffer(15, 480, 360);
     const kioskCfg = loadKioskConfig();
-    edgeLightRef.current = kioskCfg.edgeLight;
     setEdgeLightOn(kioskCfg.edgeLight);
+    setEdgeLightColor(kioskCfg.edgeLightColor);
+    setEdgeLightOpacity(kioskCfg.edgeLightOpacity);
+    setEdgeLightSize(kioskCfg.edgeLightSize);
+    setEdgeLightAnimate(kioskCfg.edgeLightAnimate);
   }, []);
 
   // 카메라 시작
@@ -566,12 +572,20 @@ export default function CapturePage() {
       {edgeLightOn && (
         <div
           className={`fixed inset-0 pointer-events-none z-50 ${
-            flash ? "animate-flash" :
-              countdown !== null ? "animate-edge-pulse" :
-              "animate-edge-breathe"
+            edgeLightAnimate
+              ? flash ? "animate-flash"
+                : countdown !== null ? "animate-edge-pulse"
+                  : "animate-edge-breathe"
+              : ""
           }`}
           style={{
-            boxShadow: "inset 0 0 100px 40px rgba(255,255,255,1)",
+            boxShadow: `inset 0 0 ${edgeLightSize * 1.5}px ${edgeLightSize}px ${edgeLightColor}`,
+            ...(edgeLightAnimate
+              ? ({
+                  "--edge-max": edgeLightOpacity,
+                  "--edge-min": edgeLightOpacity * 0.3,
+                } as CSSProperties)
+              : { opacity: edgeLightOpacity }),
           }}
           aria-hidden
         />

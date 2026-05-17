@@ -983,6 +983,64 @@ export default function AdminPage() {
               </div>
             </label>
 
+            {kiosk.edgeLight && (
+              <div className="ml-8 space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium w-12 shrink-0">색상</label>
+                  <input
+                    type="color"
+                    value={kiosk.edgeLightColor}
+                    onChange={(e) => updateKiosk({ edgeLightColor: e.target.value })}
+                    className="w-10 h-10 rounded border-0 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">광량</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={20}
+                      max={100}
+                      value={Math.round(kiosk.edgeLightOpacity * 100)}
+                      onChange={(e) => updateKiosk({ edgeLightOpacity: Number(e.target.value) / 100 })}
+                      className="flex-1 accent-purple-600"
+                    />
+                    <span className="text-sm font-bold w-10 text-right">
+                      {Math.round(kiosk.edgeLightOpacity * 100)}%
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">굵기</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={10}
+                      max={120}
+                      value={kiosk.edgeLightSize}
+                      onChange={(e) => updateKiosk({ edgeLightSize: Number(e.target.value) })}
+                      className="flex-1 accent-purple-600"
+                    />
+                    <span className="text-sm font-bold w-10 text-right">
+                      {kiosk.edgeLightSize}px
+                    </span>
+                  </div>
+                </div>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={kiosk.edgeLightAnimate}
+                    onChange={(e) => updateKiosk({ edgeLightAnimate: e.target.checked })}
+                    className="w-5 h-5 rounded accent-purple-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">카운트다운 깜빡임</span>
+                    <p className="text-xs text-gray-400">카운트다운 박자에 맞춰 링이 밝아짐</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             {kiosk.enabled && (
               <>
                 {/* 전체 화면 */}
