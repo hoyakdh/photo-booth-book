@@ -518,6 +518,10 @@ export default function CapturePage() {
 
   const handleCapture = useCallback(() => {
     if (countdown !== null || capturingRef.current) return;
+    // 사용자 제스처 시점에 AudioContext를 활성화한다.
+    // useEffect에서 initAudio를 호출해도 iOS Safari는 suspended 상태를 유지하므로
+    // 실제 클릭/탭 핸들러에서 한 번 더 호출해 확실히 resume시킨다.
+    initAudio();
     startCountdownRef.current();
   }, [countdown]);
 

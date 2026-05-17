@@ -5,30 +5,34 @@
 
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
+/**
+ * AudioContext를 반환하되, suspended 상태면 resume이 완료될 때까지 기다린다.
+ * resume()은 Promise를 반환하므로 await 없이 쓰면 suspended 채로 오디오가
+ * 스케줄링되어 무음이 될 수 있다.
+ */
+async function getAudioContextReady(): Promise<AudioContext> {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
   }
-  // iOS Safari: suspended 상태면 resume
   if (audioCtx.state === "suspended") {
-    audioCtx.resume();
+    await audioCtx.resume();
   }
   return audioCtx;
 }
 
 /**
  * iOS Safari에서 AudioContext를 활성화하기 위해
- * 사용자 터치 이벤트에서 한 번 호출
+ * 사용자 터치/클릭 이벤트에서 한 번 호출
  */
-export function initAudio() {
-  getAudioContext();
+export async function initAudio() {
+  await getAudioContextReady();
 }
 
 /**
  * 카운트다운 비프음 (짧고 높은 톤)
  */
-export function playBeep() {
-  const ctx = getAudioContext();
+export async function playBeep() {
+  const ctx = await getAudioContextReady();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
@@ -47,8 +51,8 @@ export function playBeep() {
 /**
  * 촬영 셔터음 (카메라 느낌)
  */
-export function playShutter() {
-  const ctx = getAudioContext();
+export async function playShutter() {
+  const ctx = await getAudioContextReady();
 
   // 클릭음 (노이즈 버스트)
   const bufferSize = ctx.sampleRate * 0.08;
@@ -103,8 +107,8 @@ export function playShutter() {
 /**
  * 마지막 카운트 (1!) 높은 비프
  */
-export function playFinalBeep() {
-  const ctx = getAudioContext();
+export async function playFinalBeep() {
+  const ctx = await getAudioContextReady();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
