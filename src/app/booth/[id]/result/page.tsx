@@ -7,7 +7,7 @@ import { useBookCover } from "@/hooks/useBookCovers";
 import StickerEditor from "@/components/StickerEditor";
 import BindingLoader from "@/components/result/BindingLoader";
 import { createGif } from "@/lib/gifEncoder";
-import { uploadToDrive } from "@/lib/drive";
+import { uploadToDriveWithToken, prewarmDriveClient, beginAuthSync } from "@/lib/drive";
 import { loadKioskConfig } from "@/lib/kiosk";
 import type { StickerData } from "@/types";
 
@@ -44,6 +44,11 @@ export default function ResultPage() {
     const t = setTimeout(() => setIsLoading(false), 3000);
     return () => clearTimeout(t);
   }, [photos.length]);
+
+  useEffect(() => {
+    void prewarmDriveClient();
+  }, []);
+
   const printRef = useRef<HTMLDivElement>(null);
   const gifFrames = usePhotoStore((s) => s.gifFrames);
 
@@ -200,19 +205,19 @@ export default function ResultPage() {
     if (!selectedPhoto) return;
     setDriveError(null);
     setDriveState("uploading");
+
+    // 클릭 직후 동기적으로 OAuth 팝업 열기 (await 전에 호출해야 팝업 차단 방지)
+    const authPromise = beginAuthSync();
+
     try {
       const ts = Date.now();
 
-      // 미리 준비된 PNG blob 사용 (없으면 즉석 변환)
-      let pngBlob = pngBlobRef.current;
-      if (!pngBlob) {
-        pngBlob = await (await fetch(selectedPhoto.imageData)).blob();
-      }
+      let pngBlob = pngBlobRef.current ?? (await (await fetch(selectedPhoto.imageData)).blob());
+
       const files: { blob: Blob; name: string; mime: string }[] = [
         { blob: pngBlob, name: `photo-booth-${ts}.png`, mime: "image/png" },
       ];
 
-      // 미리 준비된 GIF blob 사용 (없으면 생성)
       let gifBlob = gifBlobRef.current;
       if (!gifBlob && gifFrames.length > 0) {
         gifBlob = await createGif(gifFrames, 8, 10);
@@ -222,7 +227,8 @@ export default function ResultPage() {
         files.push({ blob: gifBlob, name: `photo-booth-${ts}.gif`, mime: "image/gif" });
       }
 
-      await uploadToDrive(files);
+      const token = await authPromise;
+      await uploadToDriveWithToken(token, files);
       setDriveState("done");
       setAskGoHome(true);
     } catch (err) {

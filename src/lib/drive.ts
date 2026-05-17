@@ -40,7 +40,17 @@ const PNG_FOLDER_KEY = "drive:folderId:png";
 // 만료 여유: 실제 만료보다 60초 먼저 새로 발급
 const TOKEN_SKEW_MS = 60_000;
 
+type GsiTokenClient = ReturnType<
+  NonNullable<NonNullable<NonNullable<Window["google"]>["accounts"]>["oauth2"]>["initTokenClient"]
+>;
+
 let gsiLoadingPromise: Promise<void> | null = null;
+
+/** initTokenClient 결과 — 클릭 핸들러에서 requestAccessToken을 동기 호출하기 위해 한 번만 생성 */
+let tokenClient: GsiTokenClient | null = null;
+let pendingAuthResolve: ((t: string) => void) | null = null;
+let pendingAuthReject: ((e: Error) => void) | null = null;
+let authInFlightPromise: Promise<string> | null = null;
 
 function loadGsi(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("window 없음"));
@@ -98,6 +108,83 @@ function clearCachedToken() {
   } catch {
     // 무시
   }
+}
+
+function createTokenClientIfNeeded(): void {
+  if (tokenClient || typeof window === "undefined") return;
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  if (!clientId) return;
+  const oauth2 = window.google!.accounts.oauth2;
+  tokenClient = oauth2.initTokenClient({
+    client_id: clientId,
+    scope: DRIVE_SCOPE,
+    prompt: "select_account",
+    callback: (resp) => {
+      const rej = pendingAuthReject;
+      const res = pendingAuthResolve;
+      pendingAuthReject = null;
+      pendingAuthResolve = null;
+      if (resp.error || !resp.access_token) {
+        rej?.(new Error(resp.error_description || resp.error || "토큰 획득 실패"));
+        return;
+      }
+      const expiresIn =
+        typeof resp.expires_in === "string" ? parseInt(resp.expires_in, 10) : resp.expires_in ?? 3600;
+      writeCachedToken(resp.access_token, expiresIn || 3600);
+      res?.(resp.access_token);
+    },
+    error_callback: (err) => {
+      const rej = pendingAuthReject;
+      pendingAuthResolve = null;
+      pendingAuthReject = null;
+      rej?.(
+        err instanceof Error ? err : new Error(typeof err === "string" ? err : "OAuth 오류")
+      );
+    },
+  });
+}
+
+/**
+ * 결과 페이지 마운트 시 호출: GSI 로드 + Token Client 1회 생성.
+ * 클릭 시 requestAccessToken을 동기 호출할 수 있게 한다.
+ */
+export async function prewarmDriveClient(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return;
+  await loadGsi();
+  createTokenClientIfNeeded();
+}
+
+/**
+ * 드라이브 저장 버튼 클릭 핸들러에서 await 없이 동기 호출할 것.
+ * 캐시된 토큰이 있으면 즉시 resolve, 없으면 팝업을 열고 완료될 때까지 pending.
+ */
+export function beginAuthSync(): Promise<string> {
+  const cached = readCachedToken();
+  if (cached) return Promise.resolve(cached);
+  if (!tokenClient) {
+    return Promise.reject(
+      new Error("Google 인증이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.")
+    );
+  }
+  if (authInFlightPromise) return authInFlightPromise;
+
+  authInFlightPromise = new Promise<string>((resolve, reject) => {
+    pendingAuthResolve = resolve;
+    pendingAuthReject = reject;
+    try {
+      tokenClient!.requestAccessToken();
+    } catch (e) {
+      pendingAuthResolve = null;
+      pendingAuthReject = null;
+      authInFlightPromise = null;
+      reject(e instanceof Error ? e : new Error(String(e)));
+    }
+  }).finally(() => {
+    authInFlightPromise = null;
+  });
+
+  return authInFlightPromise;
 }
 
 async function requestNewToken(): Promise<string> {
@@ -258,6 +345,50 @@ async function uploadOne(
   return (await res.json()) as DriveUploadResult;
 }
 
+async function uploadFilesWithTokenOnce(
+  token: string,
+  files: DriveFileInput[]
+): Promise<DriveUploadResult[]> {
+  const rootId = await ensureFolder(token, FOLDER_NAME);
+
+  const hasPng = files.some((f) => f.mime === "image/png");
+  const hasGif = files.some((f) => f.mime === "image/gif");
+
+  const [pngFolderId, gifFolderId] = await Promise.all([
+    hasPng ? ensureFolder(token, "png", rootId, PNG_FOLDER_KEY) : Promise.resolve(undefined),
+    hasGif ? ensureFolder(token, "gif", rootId, GIF_FOLDER_KEY) : Promise.resolve(undefined),
+  ]);
+
+  const results: DriveUploadResult[] = [];
+  for (const f of files) {
+    const subfolderId =
+      f.mime === "image/png" ? pngFolderId : f.mime === "image/gif" ? gifFolderId : undefined;
+    results.push(await uploadOne(token, f, subfolderId ?? rootId));
+  }
+  return results;
+}
+
+/**
+ * 이미 확보한 액세스 토큰으로 업로드 (beginAuthSync + prewarm 후 사용).
+ * 401/403 시 캐시를 비우고 새 토큰으로 1회 재시도.
+ */
+export async function uploadToDriveWithToken(
+  token: string,
+  files: DriveFileInput[]
+): Promise<DriveUploadResult[]> {
+  if (files.length === 0) return [];
+  try {
+    return await uploadFilesWithTokenOnce(token, files);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/\b(401|403)\b/.test(msg)) {
+      clearCachedToken();
+      return uploadFilesWithTokenOnce(await getAccessToken(true), files);
+    }
+    throw err;
+  }
+}
+
 /**
  * 한 번의 로그인/토큰으로 여러 파일을 사용자 드라이브에 업로드한다.
  * 세션에 캐시된 토큰이 있으면 그대로 재사용하므로, 탭을 닫기 전에는 추가 로그인 없이 업로드된다.
@@ -270,23 +401,7 @@ export async function uploadToDrive(
 
   const run = async (forceNew: boolean) => {
     const token = await getAccessToken(forceNew);
-    const rootId = await ensureFolder(token, FOLDER_NAME);
-
-    const hasPng = files.some((f) => f.mime === "image/png");
-    const hasGif = files.some((f) => f.mime === "image/gif");
-
-    const [pngFolderId, gifFolderId] = await Promise.all([
-      hasPng ? ensureFolder(token, "png", rootId, PNG_FOLDER_KEY) : Promise.resolve(undefined),
-      hasGif ? ensureFolder(token, "gif", rootId, GIF_FOLDER_KEY) : Promise.resolve(undefined),
-    ]);
-
-    const results: DriveUploadResult[] = [];
-    for (const f of files) {
-      const subfolderId =
-        f.mime === "image/png" ? pngFolderId : f.mime === "image/gif" ? gifFolderId : undefined;
-      results.push(await uploadOne(token, f, subfolderId ?? rootId));
-    }
-    return results;
+    return uploadFilesWithTokenOnce(token, files);
   };
 
   try {
