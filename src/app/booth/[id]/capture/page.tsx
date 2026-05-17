@@ -14,6 +14,7 @@ import {
 import { generateId, loadImage } from "@/lib/utils";
 import { initAudio, playBeep, playFinalBeep, playShutter } from "@/lib/sounds";
 import { loadWatermarkConfig, drawWatermark, WatermarkConfig } from "@/lib/watermark";
+import { loadKioskConfig } from "@/lib/kiosk";
 import { FrameBuffer } from "@/lib/gifEncoder";
 import { cropCanvasToPhotocardAspect, getPhotocardCropSourceRect } from "@/lib/photocardAspect";
 
@@ -34,6 +35,7 @@ export default function CapturePage() {
   const coverImageRef = useRef<HTMLImageElement | null>(null);
   const maskImageRef = useRef<HTMLImageElement | null>(null);
   const wmConfigRef = useRef<WatermarkConfig | null>(null);
+  const edgeLightRef = useRef(false);
   const frameBufferRef = useRef<FrameBuffer | null>(null);
   const frameCountRef = useRef(0);
 
@@ -63,6 +65,7 @@ export default function CapturePage() {
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
   const [showZoomUI, setShowZoomUI] = useState(false);
+  const [edgeLightOn, setEdgeLightOn] = useState(false);
 
   const transformRef = useRef<CameraTransform>({ zoom: 1, offsetX: 0, offsetY: 0 });
   useEffect(() => {
@@ -105,6 +108,9 @@ export default function CapturePage() {
   useEffect(() => {
     wmConfigRef.current = loadWatermarkConfig();
     frameBufferRef.current = new FrameBuffer(15, 480, 360);
+    const kioskCfg = loadKioskConfig();
+    edgeLightRef.current = kioskCfg.edgeLight;
+    setEdgeLightOn(kioskCfg.edgeLight);
   }, []);
 
   // 카메라 시작
@@ -556,6 +562,20 @@ export default function CapturePage() {
     <div className="h-screen-safe flex flex-col bg-black relative overflow-hidden">
       {/* 숨김 비디오 (캡처 전용) */}
       <video ref={videoRef} autoPlay playsInline muted className="absolute opacity-0 pointer-events-none" style={{ width: 1, height: 1 }} />
+
+      {edgeLightOn && (
+        <div
+          className={`fixed inset-0 pointer-events-none z-50 ${
+            flash ? "animate-flash" :
+              countdown !== null ? "animate-edge-pulse" :
+              "animate-edge-breathe"
+          }`}
+          style={{
+            boxShadow: "inset 0 0 100px 40px rgba(255,255,255,1)",
+          }}
+          aria-hidden
+        />
+      )}
 
       {/* 멀티컷 진행 표시 */}
       {totalCuts > 1 && (

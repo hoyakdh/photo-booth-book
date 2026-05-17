@@ -11,6 +11,7 @@ export interface KioskConfig {
   wakeLock: boolean;          // 화면 꺼짐 방지
   showDecorate: boolean;      // 결과 화면 꾸미기 버튼 노출
   showResultLoading: boolean; // 결과 화면 진입 시 제본 로딩 연출
+  edgeLight: boolean;        // 촬영 화면 엣지 링 라이트 효과
 }
 
 export const DEFAULT_KIOSK: KioskConfig = {
@@ -24,6 +25,7 @@ export const DEFAULT_KIOSK: KioskConfig = {
   wakeLock: true,
   showDecorate: true,
   showResultLoading: true,
+  edgeLight: false,
 };
 
 export function loadKioskConfig(): KioskConfig {

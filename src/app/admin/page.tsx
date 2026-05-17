@@ -969,6 +969,20 @@ export default function AdminPage() {
               <span className="font-medium">키오스크 모드 사용</span>
             </label>
 
+            {/* 엣지 링 라이트 (촬영 화면; 키오스크 여부와 무관) */}
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={kiosk.edgeLight}
+                onChange={(e) => updateKiosk({ edgeLight: e.target.checked })}
+                className="w-5 h-5 rounded accent-purple-600"
+              />
+              <div>
+                <span className="text-sm font-medium">엣지 링 라이트</span>
+                <p className="text-xs text-gray-400">촬영 화면 가장자리에 링 라이트 효과 표시</p>
+              </div>
+            </label>
+
             {kiosk.enabled && (
               <>
                 {/* 전체 화면 */}
